@@ -1,0 +1,74 @@
+---
+- name: Bootstrap Consul user
+  hosts: servers
+  become: true
+  tasks:
+    - user:
+        name: consul
+        system: yes
+        shell: /usr/sbin/nologin
+
+- name: Install CFSSL PKI toolkit
+  hosts: servers
+  roles:
+    - githubixx.cfssl
+
+- name: Create consul CA
+  hosts: servers
+  roles:
+    - githubixx.consul-ca
+  vars:
+    consul_ca_conf_directory: "/etc/consul/ssl"
+    consul_ca_certificate_owner: "consul"
+    consul_ca_certificate_group: "consul"
+
+- name: Ensure proper permissions on /etc/consul/ssl
+  ansible.builtin.file:
+    path: /etc/consul/ssl
+    owner: consul
+    group: consul
+    recurse: yes
+    mode: "0640"
+
+- name: install consul server
+  hosts: servers
+  become: true
+  become_user: root
+  roles:
+    - role: ansible-consul
+      tags:
+        - consul
+  vars:
+    consul_version: 1.20.6
+    consul_datacenter: "dc1"
+    consul_acl_datacenter: "dc1"
+    consul_acl_enable: yes
+    consul_domain: "consul"
+    consul_recursors: ['8.8.8.8']
+    consul_client_address: "0.0.0.0"
+    consul_dnsmasq_enable: yes
+    consul_acl_master_token_display: "{{ 'no' if consul_acl_master_token is defined else 'yes' | default('yes') }}"
+    consul_node_role: server
+    consul_zip_url: 'https://hashicorp-releases.yandexcloud.net//consul/{{ consul_version }}/consul_{{ consul_version }}_{{ consul_os }}_{{ consul_architecture }}.zip'
+    consul_checksum_file_url: 'https://hashicorp-releases.yandexcloud.net//consul/{{ consul_version }}/consul_{{ consul_version }}_SHA256SUMS'
+    consul_bootstrap_expect: "{{ 'no' if consul_acl_master_token is defined else 'yes' | default('yes') }}"
+    consul_acl_default_policy: deny
+    consul_ports_grpc: 8502
+    consul_connect_enabled: true
+    consul_tls_enable: true
+    consul_tls_copy_keys: true
+    consul_tls_files_remote_src: true
+    consul_tls_dir: "/etc/consul/ssl"
+    consul_tls_ca_crt: "{{ consul_tls_dir }}/ca-consul.pem"
+    consul_tls_server_crt: "{{ consul_tls_dir }}/cert-consul.pem"
+    consul_tls_server_key: "{{ consul_tls_dir }}/cert-consul-key.pem"
+
+- name: update resolv.conf
+  hosts: servers
+  become: true
+  become_user: root
+  roles:
+    - role: ahuffman.resolv
+      resolv_nameservers:
+        - "127.0.0.1"
+        - "8.8.8.8"

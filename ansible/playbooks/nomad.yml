@@ -1,0 +1,85 @@
+---
+- name: install nomad server
+  hosts: servers
+  become: true
+  become_user: root
+  roles:
+    - role: darkwizard242.cni
+    - role: geerlingguy.docker
+      tags:
+        - docker
+    - role: ansible-nomad
+      tags:
+        - docker
+        - nomad
+  vars:
+    nomad_version: 1.10.0
+    nomad_allow_purge_config: yes
+    nomad_datacenter: "dc1"
+    nomad_domain: "consul"
+    nomad_bind_address: "0.0.0.0"
+    nomad_node_role: both
+    nomad_use_consul: yes
+    nomad_consul_address: localhost:8500
+    nomad_acl_enabled: yes
+    nomad_raft_protocol: 3
+
+    # metrics collection
+    nomad_telemetry: yes
+    nomad_telemetry_publish_node_metrics: yes
+    nomad_telemetry_publish_allocation_metrics: yes
+    nomad_telemetry_prometheus_metrics: yes
+    nomad_telemetry_disable_hostname: false
+
+    # Vault integration
+    nomad_vault_enabled: yes
+    nomad_vault_address: http://vault.service.consul:8200
+    nomad_vault_create_from_role: "nomad-workloads"
+
+    nomad_options: { 'driver.raw_exec.enable': '1' }
+    nomad_network_speed: 0
+    nomad_bootstrap_expect: 1
+    nomad_docker_enable: yes
+    permanent: yes
+    nomad_ports_http: 4646
+    nomad_ports_rpc: 4647
+    nomad_ports_serf: 4648
+
+    # debug
+    nomad_meta:
+      connect:
+        log_level: "debug"
+
+    nomad_config_custom:
+      workload_identity:
+        - enabled: true
+          audience:
+            - "consul.io"
+            - "vault.io"
+
+      consul:
+        - address: "https://consul.service.dc1.consul:8501"
+          auth_method: "nomad-workloads"
+
+      vault:
+        - enabled: true
+          address: "https://vault.service.consul:8200"
+          auth_method: "jwt-nomad"
+          create_from_role: "nomad-workloads"
+
+      plugin:
+        - docker:
+          - config:
+            - volumes:
+                - enabled: true
+              extra_labels: ["job_name", "job_id", "task_group_name", "task_name", "namespace", "node_name", "node_id"]
+              allow_privileged: true
+              allow_caps:
+                - "all"
+              gc:
+                - container: true
+                  image: true
+                  image_delay: "1h"
+
+    nomad_zip_url: 'https://hashicorp-releases.yandexcloud.net/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_linux_{{ nomad_architecture }}.zip'
+    nomad_checksum_file_url: 'https://hashicorp-releases.yandexcloud.net/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_SHA256SUMS'

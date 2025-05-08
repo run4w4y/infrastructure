@@ -1,0 +1,16 @@
+- name: install vault
+  hosts: servers
+  become: true
+  become_user: root
+  roles:
+    - role: ansible-vault
+      tags:
+        - vault
+  vars:
+    vault_version: 1.19.3
+    vault_datacenter: "dc1"
+    vault_domain: "consul"
+    vault_backend: consul
+    vault_ui: yes
+    vault_zip_url: "https://hashicorp-releases.yandexcloud.net/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+    vault_checksum_file_url: "https://hashicorp-releases.yandexcloud.net/vault/{{ vault_version }}/vault_{{ vault_version}}_SHA256SUMS"

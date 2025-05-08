@@ -1,0 +1,11 @@
+{
+    "editor.formatOnSave": true,
+    "[terraform]": {
+        "editor.defaultFormatter": "hashicorp.terraform",
+        "editor.formatOnSave": true,
+        "editor.tabSize": 2
+    },
+    "terraform.languageServer.enable": true,
+    "terraform.experimentalFeatures.validateOnSave": true,
+    "nixEnvSelector.nixFile": "${workspaceFolder}/flake.nix"
+}

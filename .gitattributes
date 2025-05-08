@@ -1,0 +1,5 @@
+terraform/live/**/.envrc filter=git-crypt diff=git-crypt
+terraform/live/prod2/.envrc filter=git-crypt diff=git-crypt
+terraform/**/*.tfstate filter=git-crypt diff=git-crypt
+terraform/**/*.tfstate.backup filter=git-crypt diff=git-crypt
+ansible/environments/**/* filter=git-crypt diff=git-crypt
