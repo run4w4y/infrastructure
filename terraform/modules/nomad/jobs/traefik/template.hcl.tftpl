@@ -1,0 +1,111 @@
+job "traefik" {
+  datacenters = ["dc1"]
+  type        = "system"
+
+  group "traefik" {
+    count = ${count}
+
+    network {
+      mode = "bridge"
+      port "web"        { to = ${http_port} }
+      port "websecure"  { to = ${https_port} }
+      port "dashboard"  { to = ${dashboard_port} }
+    }
+
+    task "traefik" {
+      driver = "docker"
+
+      vault {}
+
+      template {
+        destination = "local/dynamic/dashboard.yml"
+        perms       = "0400"
+        change_mode = "restart"
+        data = <<EOH
+http:
+  routers:
+    dash:
+      rule: ${dashboard_rule}
+      entryPoints:
+        - dashboard
+      service: api@internal
+      middlewares:
+        - dash-auth
+  middlewares:
+    dash-auth:
+      basicAuth:
+        users:
+          - "{{ with secret "secret/data/traefik/management-user" }}{{ .Data.data.user }}:{{ .Data.data.hash }}{{ end }}"
+EOH
+      }
+
+      env {
+        TZ = "UTC"
+      }
+
+      config {
+        image = "library/traefik:2.11"
+
+        command = "traefik"
+        args = [
+          "--entrypoints.web.address=:${http_port}",
+          "--entrypoints.websecure.address=:${https_port}",
+          "--entrypoints.dashboard.address=:${dashboard_port}",
+
+          "--providers.consulcatalog=true",
+          "--providers.consulcatalog.endpoint.address=http://127.0.0.1:8500",
+          "--providers.nomad=true",
+          "--providers.file.directory=/local/dynamic",
+          "--providers.file.watch=true",
+
+          "--api=true",
+          "--api.dashboard=true",
+          "--api.insecure=false",
+          "--log.level=INFO",
+        ]
+      }
+
+      resources {
+        cpu    = ${cpu}
+        memory = ${memory}
+      }
+
+      service {
+        name = "traefik"
+        port = "web"
+
+        check {
+          name     = "alive"
+          type     = "tcp"
+          interval = "15s"
+          timeout  = "5s"
+        }
+      }
+
+      restart {
+        attempts = 6
+        interval = "10m"
+        delay    = "30s"
+        mode     = "delay"
+      }
+    }
+
+    service {
+      name = "traefik"
+      port = "${http_port}"
+      tags = ["traefik", "web"]
+
+      connect {
+        native = true
+      }
+    }
+  }
+
+  update {
+    max_parallel       = 1
+    min_healthy_time   = "10s"
+    healthy_deadline   = "3m"
+    auto_revert        = false
+    canary             = 0
+  }
+}

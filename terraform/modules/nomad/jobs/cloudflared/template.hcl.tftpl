@@ -1,0 +1,77 @@
+job "cloudflared" {
+  datacenters = ["dc1"]
+  type        = "system"
+
+  group "cloudflared" {
+    count = ${count}
+
+    task "connector" {
+      driver = "docker"
+
+      vault {}
+
+      template {
+        destination = "secrets/cred.json"
+        perms       = "0400"
+        change_mode = "restart"
+        data = <<EOH
+{{- with secret "secret/data/cloudflared/tunnel-secret" -}}
+{
+  "TunnelToken": "{{ .Data.data.secret }}"
+}
+{{- end }}
+EOH
+      }
+
+      env {
+        TUNNEL_CRED_FILE = "secrets/cred.json"
+        NO_AUTOUPDATE    = "true"
+      }
+
+      config {
+        image = "cloudflare/cloudflared:2025.4.2"
+        command = "cloudflared"
+
+        args = [
+          "tunnel",
+          "run",
+          "--cred-file", "$(TUNNEL_CRED_FILE)",
+          "${tunnel_name}"
+        ]
+      }
+
+      resources {
+        cpu    = ${cpu}
+        memory = ${memory}
+      }
+
+      service {
+        name = "cloudflared"
+
+        check {
+          name     = "connector-alive"
+          type     = "script"
+          command  = "/bin/sh"
+          args     = ["-c", "pgrep -f cloudflared >/dev/null"]
+          interval = "30s"
+          timeout  = "5s"
+        }
+      }
+
+      restart {
+        attempts = 10
+        interval = "10m"
+        delay    = "15s"
+        mode     = "delay"
+      }
+    }
+  }
+
+  update {
+    max_parallel       = 1
+    min_healthy_time   = "10s"
+    healthy_deadline   = "3m"
+    auto_revert        = false
+    canary             = 0
+  }
+}

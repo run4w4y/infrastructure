@@ -1,0 +1,155 @@
+job "minio" {
+  datacenters = ["dc1"]
+  type = "service"
+
+  group "minio" {
+    count = ${count}
+
+    volume "minio" {
+      type = "host"
+      source = "${volume_source}"
+      access_mode = "single-node-writer"
+      attachment_mode = "file-system"
+    }
+
+    network {
+      mode = "bridge"
+
+      port "api" {
+        to = ${api_port}
+      }
+
+      port "console" {
+        to = ${console_port}
+      }
+
+      port "dashboard" {
+        to = ${dashboard_port}
+      }
+    }
+
+    task "minio" {
+      driver = "docker"
+
+      vault {}
+
+      volume_mount {
+        volume = "minio"
+        destination = "/data"
+        read_only = false
+      }
+
+      config {
+        image = "minio/minio:latest"
+        command = "minio"
+        args = [
+          "server",
+          "/data",
+          "--console-address", "0.0.0.0:${dashboard_port}"
+        ]
+      }
+
+      template {
+        data = <<EOH
+{{ with secret "secret/data/minio/root-credentials" }}
+MINIO_ROOT_USER={{ .Data.data.username }}
+MINIO_ROOT_PASSWORD={{ .Data.data.password }}
+{{ end }}
+EOH
+
+        env = true
+        destination = "secrets/minio.env"
+      }
+
+      resources {
+        cpu = ${cpu}
+        memory = ${memory}
+      }
+
+      service {
+        name = "minio"
+        port = "api"
+        tags = ["api"]
+
+        check {
+          name = "alive"
+          type = "tcp"
+          interval = "30s"
+          timeout = "30s"
+        }
+      }
+
+      service {
+        name = "minio"
+        port = "console"
+        tags = ["console"]
+      }
+
+      service {
+        name = "minio"
+        port = "dashboard"
+        tags = ["dashboard"]
+      }
+    }
+
+    service {
+      name = "minio-api"
+      port = "${api_port}"
+
+      connect {
+        sidecar_service {
+          proxy {
+            config {
+              protocol = "http"
+            }
+          }
+        }
+      }
+    }
+
+    service {
+      name = "minio-console"
+      port = "${console_port}"
+
+      connect {
+        sidecar_service {
+          proxy {
+            config {
+              protocol = "tcp"
+            }
+          }
+        }
+      }
+    }
+
+    service {
+      name = "minio-dashboard"
+      port = "${dashboard_port}"
+
+      connect {
+        sidecar_service {
+          proxy {
+            config {
+              protocol = "http"
+            }
+          }
+        }
+      }
+    }
+
+    restart {
+      attempts = 10
+      interval = "5m"
+      delay = "25s"
+      mode = "delay"
+    }
+  }
+
+  update {
+    max_parallel = 1
+    min_healthy_time = "10s"
+    healthy_deadline = "3m"
+    auto_revert = false
+    canary = 0
+  }
+}

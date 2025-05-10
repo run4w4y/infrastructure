@@ -5,6 +5,8 @@ By default, all the playbooks will be run for the `interserver-run4w4y` environm
 
 If you want to run a playbook for another environment, specify the environment's inventory with an argument `-i ./environments/env/hosts.cfg`, where `env` is the name of your target deployment environment. To create a new one, just take a look at how the default environment is defined.
 
+**TODO: better inventories**
+
 You also should specify the ssh password for the server you're running the playbook for with an environment variable `ANSIBLE_PASSWORD`
 
 ## Install roles from Ansible Galaxy
@@ -14,6 +16,8 @@ ansible-galaxy install -r requirements.yml
 ```
 
 ## Consul
+**TODO: Automate agent token creation**
+
 On a fresh deployment, Consul should be the first one to be provisioned
 
 To deploy Consul, just run
@@ -30,6 +34,12 @@ ansible-vault create ./environments/dev/group_vars/consul_instances
 ```yaml
 consul_acl_master_token: ...
 consul_acl_replication_token: ...
+```
+
+Now, create a node-identity ACL token and set it as the agent token
+```bash
+consul acl token create -node-identity 'host1:dc1'
+consul acl set-agent-token agent <secret-id>
 ```
 
 To configure Consul after deployment, refer to the `/terraform/live/.../consul` directory for your specific deployment environment

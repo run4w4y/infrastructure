@@ -20,7 +20,14 @@
     nomad_bind_address: "0.0.0.0"
     nomad_node_role: both
     nomad_use_consul: yes
-    nomad_consul_address: localhost:8500
+
+    nomad_consul_address: "consul.service.dc1.consul:8501"
+    nomad_consul_ssl: true
+    nomad_consul_ca_file: /etc/consul/ssl/ca-consul.pem
+    nomad_consul_cert_file: /etc/consul/ssl/cert-consul.pem
+    nomad_consul_key_file: /etc/consul/ssl/cert-consul-key.pem
+    nomad_verify_server_hostname: false
+
     nomad_acl_enabled: yes
     nomad_raft_protocol: 3
 
@@ -51,21 +58,27 @@
         log_level: "debug"
 
     nomad_config_custom:
-      workload_identity:
-        - enabled: true
-          audience:
-            - "consul.io"
-            - "vault.io"
-
       consul:
-        - address: "https://consul.service.dc1.consul:8501"
-          auth_method: "nomad-workloads"
+        - grpc_addres: consul.service.dc1.consul:8503 # use the tls grpc listener
+          service_auth_method: "nomad-workloads"
+          task_auth_method: "nomad-workloads"
+
+          service_identity:
+            - aud: ["consul.io"]
+              ttl: 1h
+
+          task_identity:
+            - aud: ["consul.io"]
+              ttl: 1h
 
       vault:
         - enabled: true
-          address: "https://vault.service.consul:8200"
-          auth_method: "jwt-nomad"
-          create_from_role: "nomad-workloads"
+          jwt_auth_backend_path: "jwt-nomad"
+          default_identity:
+            - aud: ["vault.io"]
+              ttl: 1h
+              extra_claims:
+                - unqiue_id: "${job.region}:${job.namespace}:${job.id}"
 
       plugin:
         - docker:
