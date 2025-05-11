@@ -7,6 +7,16 @@ resource "consul_config_entry_service_intentions" "traefik_intentions" {
   }
 
   sources {
+    name   = "minio-api"
+    action = "allow"
+  }
+
+  sources {
+    name   = "minio-dashboard"
+    action = "allow"
+  }
+
+  sources {
     name   = "operator-root"
     action = "allow"
   }

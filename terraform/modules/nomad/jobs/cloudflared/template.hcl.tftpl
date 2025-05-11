@@ -5,38 +5,60 @@ job "cloudflared" {
   group "cloudflared" {
     count = ${count}
 
+    network {
+      mode = "bridge"
+
+      port "metrics" {
+        to = ${metrics_port}
+      }
+    }
+
     task "connector" {
       driver = "docker"
 
       vault {}
 
       template {
-        destination = "secrets/cred.json"
-        perms       = "0400"
+        destination = "/secrets/config.yml"
         change_mode = "restart"
+
         data = <<EOH
-{{- with secret "secret/data/cloudflared/tunnel-secret" -}}
-{
-  "TunnelToken": "{{ .Data.data.secret }}"
-}
+{{- with secret "secret/data/cloudflared/tunnel-id" -}}
+tunnel: {{ .Data.data.tunnel_id }}
 {{- end }}
+credentials-file: /secrets/cred.json
+no-autoupdate: true
+metrics: 0.0.0.0:${metrics_port}
+EOH
+      }
+
+      template {
+        destination = "/secrets/cred.json"
+        change_mode = "restart"
+
+        data = <<EOH
+{
+{{- with secret "secret/data/cloudflared/tunnel-secret" -}}
+"TunnelSecret": "{{ .Data.data.secret }}",
+{{- end }}
+{{- with secret "secret/data/cloudflared/tunnel-id" -}}
+"TunnelID": "{{ .Data.data.tunnel_id }}",
+{{- end }}
+"AccountTag": "${account_id}"
+}
 EOH
       }
 
       env {
-        TUNNEL_CRED_FILE = "secrets/cred.json"
         NO_AUTOUPDATE    = "true"
       }
 
       config {
         image = "cloudflare/cloudflared:2025.4.2"
-        command = "cloudflared"
-
         args = [
           "tunnel",
+          "--config", "/secrets/config.yml",
           "run",
-          "--cred-file", "$(TUNNEL_CRED_FILE)",
-          "${tunnel_name}"
         ]
       }
 
@@ -45,24 +67,37 @@ EOH
         memory = ${memory}
       }
 
-      service {
-        name = "cloudflared"
-
-        check {
-          name     = "connector-alive"
-          type     = "script"
-          command  = "/bin/sh"
-          args     = ["-c", "pgrep -f cloudflared >/dev/null"]
-          interval = "30s"
-          timeout  = "5s"
-        }
-      }
-
       restart {
         attempts = 10
         interval = "10m"
         delay    = "15s"
         mode     = "delay"
+      }
+    }
+
+    service {
+      name = "cloudflared"
+      port = "${metrics_port}"
+      task = "connector"
+
+      check {
+        name = "connector-alive"
+        type = "http"
+        expose = true
+        path = "/ready"
+        interval = "30s"
+        timeout = "5s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+              destination_name = "traefik"
+              local_bind_port = 8080
+            }
+          }
+        }
       }
     }
   }

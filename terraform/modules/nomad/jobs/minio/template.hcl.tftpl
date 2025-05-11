@@ -65,43 +65,32 @@ EOH
         cpu = ${cpu}
         memory = ${memory}
       }
-
-      service {
-        name = "minio"
-        port = "api"
-        tags = ["api"]
-
-        check {
-          name = "alive"
-          type = "tcp"
-          interval = "30s"
-          timeout = "30s"
-        }
-      }
-
-      service {
-        name = "minio"
-        port = "console"
-        tags = ["console"]
-      }
-
-      service {
-        name = "minio"
-        port = "dashboard"
-        tags = ["dashboard"]
-      }
     }
 
     service {
       name = "minio-api"
       port = "${api_port}"
+      task = "minio"
+
+      tags = [
+        "traefik.enable=true",
+        "traefik.sub=s3"
+      ]
+
+      check {
+        name = "minio-live"
+        type = "http"
+        expose = true
+        method = "GET"
+        path = "/minio/health/live"
+        interval = "15s"
+        timeout = "3s"
+      }
 
       connect {
         sidecar_service {
           proxy {
-            config {
-              protocol = "http"
-            }
+            transparent_proxy {}
           }
         }
       }
@@ -110,31 +99,13 @@ EOH
     service {
       name = "minio-console"
       port = "${console_port}"
-
-      connect {
-        sidecar_service {
-          proxy {
-            config {
-              protocol = "tcp"
-            }
-          }
-        }
-      }
+      task = "minio"
     }
 
     service {
       name = "minio-dashboard"
       port = "${dashboard_port}"
-
-      connect {
-        sidecar_service {
-          proxy {
-            config {
-              protocol = "http"
-            }
-          }
-        }
-      }
+      task = "minio"
     }
 
     restart {

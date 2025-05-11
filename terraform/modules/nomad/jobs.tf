@@ -54,9 +54,8 @@ variable "cloudflared_job_memory" {
   default = 128
 }
 
-variable "cloudflared_job_tunnel_name" {
-  type    = string
-  default = "nomad-tunnel"
+variable "cloudflared_job_account_id" {
+  type = string
 }
 
 variable "cloudflared_job_count" {
@@ -69,7 +68,7 @@ module "cloudflared" {
 
   cpu         = var.cloudflared_job_cpu
   memory      = var.cloudflared_job_memory
-  tunnel_name = var.cloudflared_job_tunnel_name
+  account_id  = var.cloudflared_job_account_id
   group_count = var.cloudflared_job_count
 }
 
@@ -100,6 +99,11 @@ variable "traefik_job_dashboard_port" {
   default = 8989
 }
 
+variable "traefik_job_primary_domain" {
+  type    = string
+  default = "example.com"
+}
+
 variable "traefik_job_count" {
   type    = number
   default = 1
@@ -113,5 +117,6 @@ module "traefik" {
   http_port      = var.traefik_job_http_port
   https_port     = var.traefik_job_https_port
   dashboard_port = var.traefik_job_dashboard_port
+  primary_domain = var.traefik_job_primary_domain
   group_count    = var.traefik_job_count
 }

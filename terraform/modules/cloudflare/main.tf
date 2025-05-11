@@ -53,3 +53,13 @@ resource "cloudflare_dns_record" "apps" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.this_tunnel.id}.cfargotunnel.com"
   proxied = true
 }
+
+# wildcard proxy dns record
+resource "cloudflare_dns_record" "wildcard_record" {
+  zone_id = cloudflare_zone.this.id
+  name    = "*"
+  type    = "CNAME"
+  ttl     = 1
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.this_tunnel.id}.cfargotunnel.com"
+  proxied = true
+}

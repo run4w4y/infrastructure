@@ -7,9 +7,15 @@ job "traefik" {
 
     network {
       mode = "bridge"
-      port "web"        { to = ${http_port} }
-      port "websecure"  { to = ${https_port} }
+
+      port "web"        { static = ${http_port} }
+      port "websecure"  { static = ${https_port} }
       port "dashboard"  { to = ${dashboard_port} }
+
+      # dns {
+      #   servers  = ["$${attr.unique.network.ip-address}"]
+      #   searches = ["service.consul", "consul"]
+      # }
     }
 
     task "traefik" {
@@ -44,7 +50,7 @@ EOH
       }
 
       config {
-        image = "library/traefik:2.11"
+        image = "library/traefik:3.4.0"
 
         command = "traefik"
         args = [
@@ -53,8 +59,13 @@ EOH
           "--entrypoints.dashboard.address=:${dashboard_port}",
 
           "--providers.consulcatalog=true",
-          "--providers.consulcatalog.endpoint.address=http://127.0.0.1:8500",
-          "--providers.nomad=true",
+          "--providers.consulCatalog.connectAware=true",
+          "--providers.consulcatalog.endpoint.address=consul.service.consul:8501",
+          "--providers.consulCatalog.endpoint.scheme=https",
+          "--providers.consulCatalog.endpoint.tls.insecureSkipVerify=true",
+          "--providers.consulcatalog.defaultrule=Host(`{{ if (index .Labels \"sub\") }}{{ index .Labels \"sub\" }}{{ else }}{{ .Name }}{{ end }}.${primary_domain}`)",
+          # "--providers.nomad=true",
+          # "--providers.nomad.endpoint.address=http://nomad-servers.service.consul:4646",
           "--providers.file.directory=/local/dynamic",
           "--providers.file.watch=true",
 
@@ -68,18 +79,6 @@ EOH
       resources {
         cpu    = ${cpu}
         memory = ${memory}
-      }
-
-      service {
-        name = "traefik"
-        port = "web"
-
-        check {
-          name     = "alive"
-          type     = "tcp"
-          interval = "15s"
-          timeout  = "5s"
-        }
       }
 
       restart {
@@ -96,7 +95,11 @@ EOH
       tags = ["traefik", "web"]
 
       connect {
-        native = true
+        sidecar_service {
+          proxy {
+            transparent_proxy {}
+          }
+        }
       }
     }
   }

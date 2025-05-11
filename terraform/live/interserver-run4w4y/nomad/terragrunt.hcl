@@ -16,10 +16,10 @@ inputs = {
   minio_job_count          = 1
 
   # Cloudflared job
-  cloudflared_job_cpu         = 100
-  cloudflared_job_memory      = 128
-  cloudflared_job_tunnel_name = "nomad-tunnel"
-  cloudflared_job_count       = 1
+  cloudflared_job_cpu        = 100
+  cloudflared_job_memory     = 128
+  cloudflared_job_account_id = get_env("CF_ACCOUNT_ID")
+  cloudflared_job_count      = 1
 
   # Traefik job
   traefik_job_cpu            = 100
@@ -27,6 +27,7 @@ inputs = {
   traefik_job_http_port      = 8080
   traefik_job_https_port     = 8088
   traefik_job_dashboard_port = 8989
+  traefik_job_primary_domain = get_env("DOMAIN_NAME")
   traefik_job_count          = 1
 }
 
