@@ -29,6 +29,14 @@ inputs = {
   traefik_job_dashboard_port = 8989
   traefik_job_primary_domain = get_env("DOMAIN_NAME")
   traefik_job_count          = 1
+
+  # Postgres job
+  postgres_job_cpu             = 1000
+  postgres_job_memory          = 512
+  postgres_job_port            = 5432
+  postgres_job_count           = 1
+  postgres_job_max_connections = 20
+  postgres_job_db_name         = "default_db"
 }
 
 remote_state {

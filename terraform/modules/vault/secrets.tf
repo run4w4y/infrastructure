@@ -57,3 +57,22 @@ output "traefik_dashboard_password" {
   value     = random_password.traefik.result
   sensitive = true
 }
+
+# postgres secrets
+
+resource "random_password" "postgres_password" {
+  length = 32
+}
+
+resource "vault_kv_secret_v2" "postgres_secret" {
+  mount = vault_mount.kvv2.path
+  name  = "postgres/root-credentials"
+  data_json = jsonencode({
+    username = "root"
+    password = random_password.postgres_password.result
+  })
+
+  lifecycle {
+    ignore_changes = [data_json]
+  }
+}

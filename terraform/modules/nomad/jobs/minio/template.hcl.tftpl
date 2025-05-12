@@ -74,7 +74,9 @@ EOH
 
       tags = [
         "traefik.enable=true",
-        "traefik.sub=s3"
+        "traefik.consulcatalog.connect=true",
+        "traefik.subdomain=s3",
+        "traefik.http.routers.minio-api.entrypoints=web"
       ]
 
       check {

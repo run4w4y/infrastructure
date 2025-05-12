@@ -53,3 +53,45 @@ resource "consul_acl_binding_rule" "nomad_tasks" {
   bind_name   = consul_acl_role.nomad_tasks.name
   selector    = "\"nomad_service\" not in value"
 }
+
+# traefik specific permission handling
+
+resource "consul_acl_policy" "traefik_policy" {
+  name  = "traefik"
+  rules = <<EOF
+key_prefix "traefik" {
+  policy = "write"
+}
+
+service "traefik" {
+  policy = "write"
+}
+
+agent_prefix "" {
+  policy = "read"
+}
+
+node_prefix "" {
+  policy = "read"
+}
+
+service_prefix "" {
+  policy = "read"
+}
+EOF
+}
+
+resource "consul_acl_role" "traefik_role" {
+  name        = "traefik"
+  description = "ACL role for Traefik workload identity"
+  policies    = [consul_acl_policy.traefik_policy.name]
+}
+
+resource "consul_acl_binding_rule" "traefik_rule" {
+  auth_method = consul_acl_auth_method.nomad.name
+  bind_type   = "role"
+  bind_name   = consul_acl_role.traefik_role.name
+  selector    = <<EOF
+value.nomad_job_id == "traefik"
+EOF
+}

@@ -120,3 +120,47 @@ module "traefik" {
   primary_domain = var.traefik_job_primary_domain
   group_count    = var.traefik_job_count
 }
+
+# postgres job
+
+variable "postgres_job_cpu" {
+  type    = number
+  default = 1000
+}
+
+variable "postgres_job_memory" {
+  type    = number
+  default = 512
+}
+
+variable "postgres_job_port" {
+  type    = number
+  default = 5432
+}
+
+variable "postgres_job_count" {
+  type    = number
+  default = 1
+}
+
+variable "postgres_job_max_connections" {
+  type    = number
+  default = 20
+}
+
+variable "postgres_job_db_name" {
+  type    = string
+  default = "default_db"
+}
+
+module "postgres" {
+  source = "./jobs/postgres"
+
+  cpu             = var.postgres_job_cpu
+  memory          = var.postgres_job_memory
+  port            = var.postgres_job_port
+  group_count     = var.postgres_job_count
+  max_connections = var.postgres_job_max_connections
+  volume_source   = nomad_dynamic_host_volume.postgres_data.name
+  db_name         = var.postgres_job_db_name
+}

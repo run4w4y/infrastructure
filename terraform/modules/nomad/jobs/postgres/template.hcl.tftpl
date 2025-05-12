@@ -1,0 +1,120 @@
+job "postgres" {
+  datacenters = ["dc1"]
+  type = "service"
+
+  group "postgres" {
+    count = ${count}
+
+    volume "postgres" {
+      type = "host"
+      source = "${volume_source}"
+      access_mode = "single-node-writer"
+      attachment_mode = "file-system"
+    }
+
+    network {
+      mode = "bridge"
+
+      port "db" {
+        to = ${port}
+      }
+    }
+
+    task "postgres" {
+      driver = "docker"
+
+      vault {}
+
+      config {
+        image = "postgres:17.5-alpine"
+
+        args = [
+          "-c", "max_connections=${max_connections}"
+        ]
+      }
+
+      volume_mount {
+        volume = "postgres"
+        destination = "/var/lib/postgresql/data"
+        read_only = false
+      }
+
+      template {
+        change_mode = "restart"
+        destination = "local/check_pg.sh"
+        perms       = "0755"
+
+        data = <<EOF
+#!/bin/sh
+{{ with secret "secret/data/postgres/root-credentials" }}
+POSTGRES_USER="{{ .Data.data.username }}"
+POSTGRES_PASSWORD="{{ .Data.data.password }}"
+{{ end }}
+
+exec pg_isready \
+  -h 127.0.0.1 \
+  -p 5432 \
+  -U "$POSTGRES_USER"
+EOF
+      }
+
+      template {
+        data = <<EOH
+{{ with secret "secret/data/postgres/root-credentials" }}
+POSTGRES_USER="{{ .Data.data.username }}"
+POSTGRES_PASSWORD="{{ .Data.data.password }}"
+{{ end }}
+EOH
+        env = true
+        destination = "secrets/postgres.env"
+      }
+
+      env {
+        POSTGRES_DB="${db_name}"
+        POSTGRES_PORT="${port}"
+      }
+
+      resources {
+        cpu = ${cpu}
+        memory = ${memory}
+      }
+    }
+
+    restart {
+      attempts = 10
+      interval = "5m"
+      delay = "25s"
+      mode = "delay"
+    }
+
+    service {
+      name = "postgres"
+      task = "postgres"
+      port = "${port}"
+
+      check {
+        name     = "pg_isready"
+        type     = "script"
+        command  = "local/check_pg.sh"
+        interval = "10s"
+        timeout  = "3s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            transparent_proxy {}
+          }
+        }
+      }
+    }
+  }
+
+  update {
+    max_parallel = 1
+    min_healthy_time = "5s"
+    healthy_deadline = "3m"
+    auto_revert = false
+    canary = 0
+  }
+}

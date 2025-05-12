@@ -54,6 +54,7 @@ EOH
 
         command = "traefik"
         args = [
+          "--accesslog=true",
           "--entrypoints.web.address=:${http_port}",
           "--entrypoints.websecure.address=:${https_port}",
           "--entrypoints.dashboard.address=:${dashboard_port}",
@@ -63,16 +64,19 @@ EOH
           "--providers.consulcatalog.endpoint.address=consul.service.consul:8501",
           "--providers.consulCatalog.endpoint.scheme=https",
           "--providers.consulCatalog.endpoint.tls.insecureSkipVerify=true",
-          "--providers.consulcatalog.defaultrule=Host(`{{ if (index .Labels \"sub\") }}{{ index .Labels \"sub\" }}{{ else }}{{ .Name }}{{ end }}.${primary_domain}`)",
+          "--providers.consulcatalog.defaultrule=Host(`{{ if index .Labels \"traefik.subdomain\" }}{{ index .Labels \"traefik.subdomain\" }}{{ else }}{{ .Name }}{{ end }}.${primary_domain}`)",
+          "--providers.consulcatalog.exposedbydefault=false",
+
           # "--providers.nomad=true",
           # "--providers.nomad.endpoint.address=http://nomad-servers.service.consul:4646",
+
           "--providers.file.directory=/local/dynamic",
           "--providers.file.watch=true",
 
           "--api=true",
           "--api.dashboard=true",
           "--api.insecure=false",
-          "--log.level=INFO",
+          "--log.level=DEBUG",
         ]
       }
 
@@ -101,6 +105,12 @@ EOH
           }
         }
       }
+    }
+
+    service {
+      name = "traefik-dashboard"
+      port = "${dashboard_port}"
+      tags = ["traefik", "dashboard"]
     }
   }
 
