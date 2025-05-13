@@ -71,8 +71,28 @@ resource "vault_kv_secret_v2" "postgres_secret" {
     username = "root"
     password = random_password.postgres_password.result
   })
+}
 
-  lifecycle {
-    ignore_changes = [data_json]
-  }
+# ente secrets
+
+resource "random_id" "ente_encryption_key" {
+  byte_length = 32
+}
+
+resource "random_id" "ente_hash_key" {
+  byte_length = 64
+}
+
+resource "random_id" "ente_jwt_secret" {
+  byte_length = 32
+}
+
+resource "vault_kv_secret_v2" "name" {
+  mount = vault_mount.kvv2.path
+  name  = "ente/server-secrets"
+  data_json = jsonencode({
+    encryption_key = random_id.ente_encryption_key.b64_std
+    hash_key       = random_id.ente_hash_key.b64_std
+    jwt_secret     = random_id.ente_jwt_secret.b64_std
+  })
 }
