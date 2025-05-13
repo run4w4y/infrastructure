@@ -1,0 +1,150 @@
+job "ente" {
+  datacenters = ["dc1"]
+  type = "service"
+
+  group "museum" {
+    count = ${count}
+
+    network {
+      mode = "bridge"
+
+      port "http" {
+        to = ${http_port}
+      }
+
+      port "metrics" {
+        to = ${metrics_port}
+      }
+    }
+
+    service {
+      name = "ente-museum"
+      task = "museum"
+      port = "${http_port}"
+
+      tags = [
+        "traefik.enable=true",
+        "traefik.consulcatalog.connect=true",
+        "traefik.subdomain=ente-api",
+        "traefik.http.routers.ente-museum.entrypoints=web"
+      ]
+
+      check {
+        name = "museum-ping"
+        type = "http"
+        expose = true
+        method = "GET"
+        path = "/ping"
+        interval = "10s"
+        timeout = "2s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+              destination_name = "postgres"
+              local_bind_port = 5432
+            }
+
+            upstreams {
+              destination_name = "minio-api"
+              local_bind_port = 9000
+            }
+          }
+        }
+      }
+    }
+
+    task "museum" {
+      driver = "docker"
+
+      vault {}
+
+      config {
+        image = "ghcr.io/ente-io/server:latest"
+      }
+
+      env {
+        ENTE_S3_ENDPOINT_OVERRIDE = "http://127.0.0.1:9000"
+      }
+
+      template {
+        destination = "local/db.env"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+ENTE_DB_HOST=127.0.0.1
+ENTE_DB_PORT=5432
+{{ with secret "secret/data/ente/postgres-credentials" -}}
+ENTE_DB_NAME={{ .Data.data.database }}
+ENTE_DB_USER={{ .Data.data.username }}
+ENTE_DB_PASSWORD={{ .Data.data.password }}
+{{- end }}
+EOF
+      }
+
+      template {
+        destination = "/museum.yaml"
+        change_mode = "restart"
+        data = <<EOF
+db:
+  host: "127.0.0.1"
+  port: 5432
+  sslmode: "disable"
+  {{ with secret "secret/data/ente/postgres-credentials" -}}
+  name: "{{ .Data.data.database }}"
+  user: "{{ .Data.data.username }}"
+  password: "{{ .Data.data.password }}"
+  {{- end }}
+
+s3:
+  endpoint_override: "http://127.0.0.1:9000"
+  are_local_buckets: true
+  hot_storage:
+    primary: local
+  local:
+    {{ with secret "secret/data/ente/s3-config" -}}
+    key:    "{{ .Data.data.access_key }}"
+    secret: "{{ .Data.data.secret_key }}"
+    bucket: "{{ index .Data.data.buckets "b2-eu-cen" }}"
+    {{- end }}
+    region: "ru-central"
+    force_path_style: true
+
+key:
+  {{ with secret "secret/data/ente/server-secrets" -}}
+  encryption: "{{ .Data.data.encryption_key }}"
+  hash: "{{ .Data.data.hash_key }}"
+  {{- end }}
+
+jwt:
+  {{ with secret "secret/data/ente/server-secrets" -}}
+  secret: "{{ .Data.data.jwt_secret }}"
+  {{- end }}
+
+internal:
+  disable-registration: false
+
+apps:
+  public-albums: "https://ente-albums.${primary_domain}"
+
+http:
+  use-tls: false
+EOF
+      }
+
+      resources {
+        cpu = ${cpu}
+        memory = ${memory}
+      }
+
+      restart {
+        attempts = 3
+        interval = "10m"
+        delay    = "30s"
+        mode     = "delay"
+      }
+    }
+  }
+}

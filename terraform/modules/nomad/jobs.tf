@@ -164,3 +164,33 @@ module "postgres" {
   volume_source   = nomad_dynamic_host_volume.postgres_data.name
   db_name         = var.postgres_job_db_name
 }
+
+# ente server (museum) job
+
+variable "ente_museum_job_cpu" {
+  type    = number
+  default = 400
+}
+
+variable "ente_museum_job_memory" {
+  type    = number
+  default = 1024
+}
+
+variable "ente_museum_job_count" {
+  type    = number
+  default = 1
+}
+
+variable "ente_museum_primary_domain" {
+  type = string
+}
+
+module "ente_museum" {
+  source = "./jobs/ente-museum"
+
+  cpu            = var.ente_museum_job_cpu
+  memory         = var.ente_museum_job_memory
+  group_count    = var.ente_museum_job_count
+  primary_domain = var.ente_museum_primary_domain
+}

@@ -8,7 +8,8 @@ data "vault_kv_secret_v2" "postgres_secret" {
 # create the ente user credentials
 
 resource "random_password" "ente_postgres" {
-  length = 32
+  length  = 32
+  special = false
 }
 
 resource "vault_kv_secret_v2" "ente_postgres_secret" {

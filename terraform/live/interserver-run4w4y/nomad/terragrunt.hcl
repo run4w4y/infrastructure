@@ -37,6 +37,12 @@ inputs = {
   postgres_job_count           = 1
   postgres_job_max_connections = 20
   postgres_job_db_name         = "default_db"
+
+  # Ente server (museum) job
+  ente_museum_job_cpu        = 400
+  ente_museum_job_memory     = 1024
+  ente_museum_job_count      = 1
+  ente_museum_primary_domain = get_env("DOMAIN_NAME")
 }
 
 remote_state {
