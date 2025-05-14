@@ -66,7 +66,7 @@ jobs:
 
           docker_image_tag: ${{ needs.build-ente.outputs.docker_image_tag }}
           docker_image_username: ${{ github.actor }}
-          docker_image_password: ${{ secrets.GITHUB_TOKEN }}
+          docker_image_password: ${{ secrets.REGISTRY_PULL_TOKEN }}
           docker_image_name: ${{ env.ENTE_WEB_IMAGE_NAME }}
         run: |
           nomad-pack run packs/ente-web --parser-v1 -f ./pack_vars/interserver-run4w4y/ente-web.hcl \

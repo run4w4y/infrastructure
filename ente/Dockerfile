@@ -12,7 +12,7 @@ WORKDIR /ente-repo/ente-photos-${VERSION}/web
 
 RUN corepack enable
 
-ENV NEXT_PUBLIC_ENTE_ENDPOINT=https://ente.${PUBLIC_BASE_DOMAIN}
+ENV NEXT_PUBLIC_ENTE_ENDPOINT=https://ente-api.${PUBLIC_BASE_DOMAIN}
 ENV NEXT_PUBLIC_ENTE_ALBUMS_ENDPOINT=https://ente-albums.${PUBLIC_BASE_DOMAIN}
 
 RUN yarn cache clean
