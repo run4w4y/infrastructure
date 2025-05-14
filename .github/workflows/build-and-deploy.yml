@@ -55,7 +55,9 @@ jobs:
         run: |
           VERSION="0.3.0"
           curl -fsSL "https://releases.hashicorp.com/nomad-pack/${VERSION}/nomad-pack_${VERSION}_linux_amd64.zip" -o np.zip
-          unzip -q np.zip -d /usr/local/bin
+          mkdir ./np
+          unzip -q np.zip -d ./np
+          mv ./np/nomad-pack /usr/local/bin/nomad-pack
 
       - name: Deploy Nomad Pack
         env:
