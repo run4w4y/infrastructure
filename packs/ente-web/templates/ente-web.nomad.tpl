@@ -32,9 +32,7 @@ job [[ .my.job_name | quote ]] {
 
       connect {
         sidecar_service {
-          proxy {
-            transparent_proxy {}
-          }
+          proxy {}
         }
       }
     }
