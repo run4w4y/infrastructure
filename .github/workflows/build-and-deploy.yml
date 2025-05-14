@@ -70,7 +70,7 @@ jobs:
           docker_image_name: ${{ env.ENTE_WEB_IMAGE_NAME }}
         run: |
           nomad-pack run packs/ente-web --parser-v1 -f ./pack_vars/interserver-run4w4y/ente-web.hcl \
-            -var "docker_image_tag=${docker_image_tag}" \
-            -var "docker_image_username=${docker_image_username}" \
-            -var "docker_image_password=${docker_image_password}" \
-            -var "docker_image_name=${docker_image_name}"
+            --var "docker_image_tag=${docker_image_tag}" \
+            --var "docker_image_username=${docker_image_username}" \
+            --var "docker_image_password=${docker_image_password}" \
+            --var "docker_image_name=${docker_image_name}"
