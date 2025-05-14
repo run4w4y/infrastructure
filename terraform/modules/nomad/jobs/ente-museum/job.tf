@@ -16,6 +16,8 @@ variable "metrics_port" {
 
 variable "primary_domain" {}
 
+variable "admin_user_id" {}
+
 resource "nomad_job" "ente_museum_job" {
   jobspec = templatefile("${path.module}/template.hcl.tftpl", {
     cpu            = var.cpu
@@ -24,5 +26,6 @@ resource "nomad_job" "ente_museum_job" {
     http_port      = var.http_port
     metrics_port   = var.metrics_port
     primary_domain = var.primary_domain
+    admin_user_id  = var.admin_user_id
   })
 }

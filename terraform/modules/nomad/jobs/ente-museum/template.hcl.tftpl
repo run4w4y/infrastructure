@@ -63,29 +63,13 @@ job "ente" {
 
       config {
         image = "ghcr.io/ente-io/server:latest"
-      }
-
-      env {
-        ENTE_S3_ENDPOINT_OVERRIDE = "http://127.0.0.1:9000"
-      }
-
-      template {
-        destination = "local/db.env"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-ENTE_DB_HOST=127.0.0.1
-ENTE_DB_PORT=5432
-{{ with secret "secret/data/ente/postgres-credentials" -}}
-ENTE_DB_NAME={{ .Data.data.database }}
-ENTE_DB_USER={{ .Data.data.username }}
-ENTE_DB_PASSWORD={{ .Data.data.password }}
-{{- end }}
-EOF
+        volumes = [
+          "local/museum.yaml:/museum.yaml"
+        ]
       }
 
       template {
-        destination = "/museum.yaml"
+        destination = "local/museum.yaml"
         change_mode = "restart"
         data = <<EOF
 db:
@@ -99,18 +83,16 @@ db:
   {{- end }}
 
 s3:
-  endpoint_override: "http://127.0.0.1:9000"
-  are_local_buckets: true
-  hot_storage:
-    primary: local
-  local:
+  are_local_buckets: false
+  use_path_style_urls: true
+  b2-eu-cen:
     {{ with secret "secret/data/ente/s3-config" -}}
     key:    "{{ .Data.data.access_key }}"
     secret: "{{ .Data.data.secret_key }}"
     bucket: "{{ index .Data.data.buckets "b2-eu-cen" }}"
     {{- end }}
+    endpoint: "https://s3.${primary_domain}"
     region: "ru-central"
-    force_path_style: true
 
 key:
   {{ with secret "secret/data/ente/server-secrets" -}}
@@ -124,6 +106,8 @@ jwt:
   {{- end }}
 
 internal:
+  admins:
+    - ${admin_user_id}
   disable-registration: false
 
 apps:

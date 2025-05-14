@@ -186,6 +186,11 @@ variable "ente_museum_primary_domain" {
   type = string
 }
 
+variable "ente_museum_job_admin_user_id" {
+  type    = number
+  default = 0
+}
+
 module "ente_museum" {
   source = "./jobs/ente-museum"
 
@@ -193,4 +198,5 @@ module "ente_museum" {
   memory         = var.ente_museum_job_memory
   group_count    = var.ente_museum_job_count
   primary_domain = var.ente_museum_primary_domain
+  admin_user_id  = var.ente_museum_job_admin_user_id
 }

@@ -30,7 +30,6 @@ job [[ .my.job_name | quote ]] {
         "traefik.http.routers.ente-web-[[ . ]].entrypoints=web"
       ]
 
-      [[ if eq . "photos" -]]
       connect {
         sidecar_service {
           proxy {
@@ -38,7 +37,6 @@ job [[ .my.job_name | quote ]] {
           }
         }
       }
-      [[- end ]]
     }
     [[ end ]]
 
