@@ -1,0 +1,74 @@
+name: Build ente-web and deploy it to Nomad
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  ENTE_WEB_IMAGE_NAME: ${{ github.repository_owner }}/ente-web
+
+jobs:
+  build-ente:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      docker_image_tag: ${{ steps.set_tag.outputs.tag }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ente-web
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.ENTE_WEB_IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            PUBLIC_BASE_DOMAIN=${{ secrets.PUBLIC_BASE_DOMAIN }}
+
+      - name: Expose image tag for downstream jobs
+        id: set_tag
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+  deploy-ente:
+    needs: build-ente
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Nomad Pack
+        run: |
+          VERSION="0.3.0"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${VERSION}/nomad-pack_${VERSION}_linux_amd64.zip" -o np.zip
+          unzip -q np.zip -d /usr/local/bin
+
+      - name: Deploy Nomad Pack
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+
+          docker_image_tag: ${{ needs.build-ente.outputs.docker_image_tag }}
+          docker_image_username: ${{ github.actor }}
+          docker_image_password: ${{ secrets.GITHUB_TOKEN }}
+          docker_image_name: ${{ env.ENTE_WEB_IMAGE_NAME }}
+        run: |
+          nomad-pack run packs/ente-web --parser-v1 -f ./pack_vars/interserver-run4w4y/ente-web.hcl \
+            -var "docker_image_tag=${docker_image_tag}" \
+            -var "docker_image_username=${docker_image_username}" \
+            -var "docker_image_password=${docker_image_password}" \
+            -var "docker_image_name=${docker_image_name}"
