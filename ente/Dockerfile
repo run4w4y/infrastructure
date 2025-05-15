@@ -43,4 +43,4 @@ ENV ALBUMS_PORT=3004
 ENV ENTE_API_ORIGIN=https://ente-api.${PUBLIC_BASE_DOMAIN}
 ENV ENTE_ALBUMS_ORIGIN=https://ente-albums.${PUBLIC_BASE_DOMAIN}
 
-CMD ["sh", "-c", "serve /app/photos -l tcp://0.0.0.0:${PHOTOS_PORT} & serve /app/accounts -l tcp://0.0.0.0:${ACCOUNTS_PORT} & serve /app/auth -l tcp://0.0.0.0:${AUTH_PORT} & serve /app/cast -l tcp://0.0.0.0:${CAST_PORT}"]
+CMD ["sh", "-c", "serve /app/photos -l tcp://0.0.0.0:${PHOTOS_PORT} & serve /app/accounts -l tcp://0.0.0.0:${ACCOUNTS_PORT} & serve /app/auth -l tcp://0.0.0.0:${AUTH_PORT} & serve /app/cast -l tcp://0.0.0.0:${CAST_PORT} & serve /app/photos -l tcp://0.0.0.0:${ALBUMS_PORT}"]
