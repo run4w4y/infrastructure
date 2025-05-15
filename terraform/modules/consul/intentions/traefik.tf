@@ -17,6 +17,31 @@ resource "consul_config_entry_service_intentions" "traefik_intentions" {
   }
 
   sources {
+    name   = "ente-web-photos"
+    action = "allow"
+  }
+
+  sources {
+    name   = "ente-web-accounts"
+    action = "allow"
+  }
+
+  sources {
+    name   = "ente-web-auth"
+    action = "allow"
+  }
+
+  sources {
+    name   = "ente-web-cast"
+    action = "allow"
+  }
+
+  sources {
+    name   = "ente-web-albums"
+    action = "allow"
+  }
+
+  sources {
     name   = "operator-root"
     action = "allow"
   }

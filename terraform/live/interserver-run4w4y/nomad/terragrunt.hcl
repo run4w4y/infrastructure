@@ -31,7 +31,7 @@ inputs = {
   traefik_job_count          = 1
 
   # Postgres job
-  postgres_job_cpu             = 1000
+  postgres_job_cpu             = 400
   postgres_job_memory          = 1024
   postgres_job_port            = 5432
   postgres_job_count           = 1
