@@ -7,13 +7,30 @@ If you want to run a playbook for another environment, specify the environment's
 
 **TODO: better inventories**
 
-You also should specify the ssh password for the server you're running the playbook for with an environment variable `ANSIBLE_PASSWORD`
+You also should specify the server address and SSH password through `SERVER_IP_ADDRESS` and `SERVER_SSH_PASSWORD`.
 
 ## Install roles from Ansible Galaxy
 Before proceeding, make sure that all of the roles are present:
 ```bash
 ansible-galaxy install -r requirements.yml
 ```
+
+## Secrets
+
+Secrets are expected to be injected into the Ansible process by the Infisical CLI. The environment-specific `group_vars` files map those environment variables to the role variables expected by the Consul, Vault, and Nomad roles.
+
+Unlike Terraform live directories, the Ansible directory does not automatically load one Infisical environment on `cd`; choose it explicitly per playbook run.
+
+For the default environment:
+
+```bash
+infisical run \
+  --env=prod \
+  --path=/ansible \
+  -- ansible-playbook playbooks/nomad.yml
+```
+
+When running Terraform for Consul, Terraform can publish the service-specific Consul ACL tokens into the same Infisical folder when `INFISICAL_PROJECT_ID` is set in the shell.
 
 ## Consul
 **TODO: Automate agent token creation**
@@ -26,15 +43,13 @@ To deploy Consul, just run
 ansible-playbook playbooks/consul.yml
 ```
 
-Grab both the master and replication ACL tokens from your newly bootstrapped Consul, and save them in the group_vars:
+Grab both the master and replication ACL tokens from your newly bootstrapped Consul, and save them in Infisical:
 ```bash
-ansible-vault create ./environments/dev/group_vars/consul_instances
+CONSUL_ACL_MASTER_TOKEN=...
+CONSUL_ACL_REPLICATION_TOKEN=...
 ```
 
-```yaml
-consul_acl_master_token: ...
-consul_acl_replication_token: ...
-```
+The `consul_instances` group vars file reads these values from the environment.
 
 Now, create a node-identity ACL token and set it as the agent token
 ```bash
@@ -46,32 +61,15 @@ To configure Consul after deployment, refer to the `/terraform/live/.../consul` 
 
 ## Vault
 
-### Create a group_vars file
-Before running the playbook, create an encrypted `group_vars` file with a Consul token to be used by Vault (you can get one by running Terraform for the `consul` module)
-
-```bash
-# replace ... with your target deployment environment
-ansible-vault create ./environments/.../group_vars/vault_instances
-```
-
-### Fill in the Consul token
-
-The contents should be like this
-
-```yaml
-vault_consul_token: <consul acl token>
-```
-
-Ideally, here you would want to use a token created specifically for Vault and not the master ACL token you got from deploying Consul earlier
-
-Running Terraform for Consul should give you a token with appropriate permissions for usage with Vault, so you should be using that token here
+Before running the playbook, make sure `VAULT_CONSUL_TOKEN` is available from Infisical. Terraform for Consul can publish this token automatically; it is the Consul ACL token created specifically for Vault.
 
 ### Run the playbook
 
-After that, you can run the playbook without any issues, running it will prompt you for a password you previously used when creating the vars file
-
 ```bash
-ansible-playbook --ask-vault-pass playbooks/vault.yml
+infisical run \
+  --env=prod \
+  --path=/ansible \
+  -- ansible-playbook playbooks/vault.yml
 ```
 
 ### After deployment
@@ -93,25 +91,16 @@ With Vault up and running, you should apply Terraform to set it up. Refer to `/d
 
 ## Nomad
 
-### Create a group_vars file
-Just like before, we need to provide tokens for Vault and Consul for this deployment with a `group_vars` file
+Before running the playbook, make sure `NOMAD_CONSUL_TOKEN` is available from Infisical.
 
-There are two tokens necessary for this, one for Vault and one for Consul. Same as with tokens for running the Vault playbook, Terraform for both Vault and Consul has outputs that provide these tokens with appropriate permissions, so you should be using those.
-
-To create the file, run
-```bash
-ansible-vault create environments/dev/group_vars/nomad_instances
-```
-
-Contents of this file should look like this
-```yaml
-nomad_consul_token: <consul token from tf output>
-nomad_vault_token: <vault token from tf output>
-```
+Terraform for Consul can publish `NOMAD_CONSUL_TOKEN` automatically. Vault access for workloads uses Nomad workload identities, so no Nomad server Vault token is required.
 
 ### Run the playbook
 ```bash
-ansible-playbook --ask-vault-pass playbooks/nomad.yml
+infisical run \
+  --env=prod \
+  --path=/ansible \
+  -- ansible-playbook playbooks/nomad.yml
 ```
 
 ### After deployment

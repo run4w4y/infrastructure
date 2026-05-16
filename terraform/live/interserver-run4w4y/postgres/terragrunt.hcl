@@ -6,13 +6,20 @@ inputs = {
   vault_address = get_env("VAULT_ADDR")
 }
 
-remote_state {
-  backend = "local"
-  generate = {
-    path      = "backend.tf"
-    if_exists = "overwrite"
+generate "backend" {
+  path      = "backend.tf"
+  if_exists = "overwrite"
+
+  contents = <<EOF
+terraform {
+  cloud {
+    organization = "${get_env("TF_CLOUD_ORGANIZATION")}"
+
+    workspaces {
+      project = "${get_env("TF_CLOUD_PROJECT")}"
+      name    = "interserver-run4w4y-postgres"
+    }
   }
-  config = {
-    path = "${get_terragrunt_dir()}/terraform.tfstate"
-  }
+}
+EOF
 }

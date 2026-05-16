@@ -40,12 +40,12 @@
     consul_recursors: ['8.8.8.8']
     consul_client_address: "0.0.0.0"
     consul_dnsmasq_enable: yes
-    consul_acl_master_token_display: "{{ 'no' if consul_acl_master_token is defined else 'yes' | default('yes') }}"
+    consul_acl_master_token_display: "{{ 'no' if (consul_acl_master_token | default('') | trim | length) > 0 else 'yes' }}"
     consul_node_role: server
     consul_node_name: "{{ inventory_hostname | replace('.', '_') }}"
     consul_zip_url: 'https://hashicorp-releases.yandexcloud.net//consul/{{ consul_version }}/consul_{{ consul_version }}_{{ consul_os }}_{{ consul_architecture }}.zip'
     consul_checksum_file_url: 'https://hashicorp-releases.yandexcloud.net//consul/{{ consul_version }}/consul_{{ consul_version }}_SHA256SUMS'
-    consul_bootstrap_expect: "{{ 'no' if consul_acl_master_token is defined else 'yes' | default('yes') }}"
+    consul_bootstrap_expect: "{{ 'no' if (consul_acl_master_token | default('') | trim | length) > 0 else 'yes' }}"
     consul_acl_default_policy: deny
     consul_ports_grpc: 8502
     consul_ports_https: 8501

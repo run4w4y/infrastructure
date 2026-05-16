@@ -13,6 +13,10 @@
         inherit system;
         config.allowUnfree = true;
       };
+      infisical-cli = import ./infisical.nix
+        {
+          inherit pkgs system;
+        };
     in
     with pkgs;
     {
@@ -34,6 +38,8 @@
           terragrunt
           ansible
           vault
+          infisical-cli
+          git-crypt
           unzip
           minio-client
         ];

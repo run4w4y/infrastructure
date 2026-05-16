@@ -1,2 +1,7 @@
 .venv
 .direnv
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/.terraform/
+**/.terragrunt-cache/
+
