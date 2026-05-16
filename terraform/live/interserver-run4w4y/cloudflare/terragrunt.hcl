@@ -9,6 +9,13 @@ inputs = {
   cloudflare_api_token  = get_env("CF_API_TOKEN")
   porkbun_api_key       = get_env("PB_API_KEY")
   porkbun_secret_key    = get_env("PB_SECRET_KEY")
+
+  pages_projects = {
+    cv = {
+      production_branch = "main"
+      domains           = ["cv"]
+    }
+  }
 }
 
 generate "backend" {

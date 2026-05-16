@@ -20,3 +20,27 @@ output "app_hostnames" {
     host => rec.id
   }
 }
+
+output "pages_projects" {
+  description = "Map of Cloudflare Pages project keys to project names and pages.dev subdomains"
+  value = {
+    for key, project in cloudflare_pages_project.this :
+    key => {
+      name      = project.name
+      subdomain = project.subdomain
+    }
+  }
+}
+
+output "pages_domains" {
+  description = "Map of Cloudflare Pages custom domains to Pages domain status and DNS record IDs"
+  value = {
+    for key, domain in cloudflare_pages_domain.this :
+    key => {
+      name          = domain.name
+      project_name  = domain.project_name
+      status        = domain.status
+      dns_record_id = cloudflare_dns_record.pages_domains[key].id
+    }
+  }
+}

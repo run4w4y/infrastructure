@@ -9,7 +9,7 @@ variable "cloudflare_account_id" {
 }
 
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token with Tunnel + Zone:Read permissions"
+  description = "Cloudflare API token with permissions for zone management, DNS records, tunnels, and Pages projects"
   type        = string
   sensitive   = true
 }
@@ -54,4 +54,22 @@ variable "ingress_rules" {
     { hostname = "vault", service = "http://127.0.0.1:8200" },
     { hostname = "consul", service = "http://127.0.0.1:8500" }
   ]
+}
+
+variable "pages_projects" {
+  description = "Cloudflare Pages projects to create. Domains are hostnames relative to domain_name, for example \"cv\" creates cv.example.com."
+  type = map(object({
+    project_name      = optional(string)
+    production_branch = optional(string, "main")
+    domains           = optional(set(string), [])
+    build_config = optional(object({
+      build_caching       = optional(bool)
+      build_command       = optional(string)
+      destination_dir     = optional(string)
+      root_dir            = optional(string)
+      web_analytics_tag   = optional(string)
+      web_analytics_token = optional(string)
+    }))
+  }))
+  default = {}
 }

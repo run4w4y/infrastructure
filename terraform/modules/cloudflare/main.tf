@@ -47,7 +47,7 @@ resource "cloudflare_dns_record" "apps" {
   }
 
   zone_id = cloudflare_zone.this.id
-  name    = each.key
+  name    = each.value.host_fqdn
   type    = "CNAME"
   ttl     = 1
   content = "${cloudflare_zero_trust_tunnel_cloudflared.this_tunnel.id}.cfargotunnel.com"
@@ -57,7 +57,7 @@ resource "cloudflare_dns_record" "apps" {
 # wildcard proxy dns record
 resource "cloudflare_dns_record" "wildcard_record" {
   zone_id = cloudflare_zone.this.id
-  name    = "*"
+  name    = "*.${var.domain_name}"
   type    = "CNAME"
   ttl     = 1
   content = "${cloudflare_zero_trust_tunnel_cloudflared.this_tunnel.id}.cfargotunnel.com"

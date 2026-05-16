@@ -40,7 +40,7 @@ locals {
       }
       CF_API_TOKEN = {
         value       = local.placeholder_value
-        description = "Cloudflare API token."
+        description = "Cloudflare API token with zone, DNS, tunnel, and Pages permissions."
         kind        = "user-placeholder"
       }
       CONSUL_HTTP_ADDR = {
