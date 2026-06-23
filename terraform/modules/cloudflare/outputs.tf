@@ -1,3 +1,18 @@
+output "zone_id" {
+  description = "Cloudflare zone ID for the managed domain."
+  value       = cloudflare_zone.this.id
+}
+
+output "zone_name" {
+  description = "Cloudflare zone name."
+  value       = cloudflare_zone.this.name
+}
+
+output "cloudflare_account_id" {
+  description = "Cloudflare account ID that owns the managed zone."
+  value       = var.cloudflare_account_id
+}
+
 output "nameservers" {
   description = "Authoritative name-servers you must set at Porkbun"
   value       = cloudflare_zone.this.name_servers
