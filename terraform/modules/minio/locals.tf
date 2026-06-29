@@ -1,5 +1,7 @@
 locals {
-  ente_username = "ente"
+  ente_username  = "ente"
+  share_username = "share"
+  share_bucket   = "share"
   ente_buckets = [
     "b2-eu-cen",
     "wasabi-eu-central-2-v3",

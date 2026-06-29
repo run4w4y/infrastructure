@@ -19,3 +19,14 @@ resource "vault_kv_secret_v2" "ente_s3_secret" {
     }
   })
 }
+
+resource "vault_kv_secret_v2" "share_s3_secret" {
+  mount = "secret"
+  name  = "share/s3-config"
+  data_json = jsonencode({
+    access_key = minio_iam_user.share.id
+    secret_key = minio_iam_user.share.secret
+    bucket     = minio_s3_bucket.share.bucket
+    endpoint   = "https://${var.minio_address}"
+  })
+}
