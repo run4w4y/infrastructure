@@ -1,3 +1,21 @@
+variable "connect_sidecar_cpu" {
+  description = "CPU reservation in MHz for every Consul Connect Envoy sidecar."
+  type        = number
+  default     = 50
+}
+
+variable "connect_sidecar_memory" {
+  description = "Soft memory reservation in MiB for every Consul Connect Envoy sidecar."
+  type        = number
+  default     = 64
+}
+
+variable "connect_sidecar_memory_max" {
+  description = "Hard memory limit in MiB for every Consul Connect Envoy sidecar."
+  type        = number
+  default     = 128
+}
+
 # minio job
 
 variable "minio_job_cpu" {
@@ -33,13 +51,16 @@ variable "minio_job_count" {
 module "minio" {
   source = "./jobs/minio"
 
-  cpu            = var.minio_job_cpu
-  memory         = var.minio_job_memory
-  api_port       = var.minio_job_api_port
-  console_port   = var.minio_job_console_port
-  dashboard_port = var.minio_job_dashboard_port
-  group_count    = var.minio_job_count
-  volume_source  = nomad_dynamic_host_volume.minio_data.name
+  cpu                = var.minio_job_cpu
+  memory             = var.minio_job_memory
+  api_port           = var.minio_job_api_port
+  console_port       = var.minio_job_console_port
+  dashboard_port     = var.minio_job_dashboard_port
+  group_count        = var.minio_job_count
+  volume_source      = nomad_dynamic_host_volume.minio_data.name
+  sidecar_cpu        = var.connect_sidecar_cpu
+  sidecar_memory     = var.connect_sidecar_memory
+  sidecar_memory_max = var.connect_sidecar_memory_max
 }
 
 # cloudflared job
@@ -66,10 +87,13 @@ variable "cloudflared_job_count" {
 module "cloudflared" {
   source = "./jobs/cloudflared"
 
-  cpu         = var.cloudflared_job_cpu
-  memory      = var.cloudflared_job_memory
-  account_id  = var.cloudflared_job_account_id
-  group_count = var.cloudflared_job_count
+  cpu                = var.cloudflared_job_cpu
+  memory             = var.cloudflared_job_memory
+  account_id         = var.cloudflared_job_account_id
+  group_count        = var.cloudflared_job_count
+  sidecar_cpu        = var.connect_sidecar_cpu
+  sidecar_memory     = var.connect_sidecar_memory
+  sidecar_memory_max = var.connect_sidecar_memory_max
 }
 
 # traefik job
@@ -112,13 +136,16 @@ variable "traefik_job_count" {
 module "traefik" {
   source = "./jobs/traefik"
 
-  cpu            = var.traefik_job_cpu
-  memory         = var.traefik_job_memory
-  http_port      = var.traefik_job_http_port
-  https_port     = var.traefik_job_https_port
-  dashboard_port = var.traefik_job_dashboard_port
-  primary_domain = var.traefik_job_primary_domain
-  group_count    = var.traefik_job_count
+  cpu                = var.traefik_job_cpu
+  memory             = var.traefik_job_memory
+  http_port          = var.traefik_job_http_port
+  https_port         = var.traefik_job_https_port
+  dashboard_port     = var.traefik_job_dashboard_port
+  primary_domain     = var.traefik_job_primary_domain
+  group_count        = var.traefik_job_count
+  sidecar_cpu        = var.connect_sidecar_cpu
+  sidecar_memory     = var.connect_sidecar_memory
+  sidecar_memory_max = var.connect_sidecar_memory_max
 }
 
 # postgres job
@@ -156,13 +183,69 @@ variable "postgres_job_db_name" {
 module "postgres" {
   source = "./jobs/postgres"
 
-  cpu             = var.postgres_job_cpu
-  memory          = var.postgres_job_memory
-  port            = var.postgres_job_port
-  group_count     = var.postgres_job_count
-  max_connections = var.postgres_job_max_connections
-  volume_source   = nomad_dynamic_host_volume.postgres_data.name
-  db_name         = var.postgres_job_db_name
+  cpu                = var.postgres_job_cpu
+  memory             = var.postgres_job_memory
+  port               = var.postgres_job_port
+  group_count        = var.postgres_job_count
+  max_connections    = var.postgres_job_max_connections
+  volume_source      = nomad_dynamic_host_volume.postgres_data.name
+  db_name            = var.postgres_job_db_name
+  sidecar_cpu        = var.connect_sidecar_cpu
+  sidecar_memory     = var.connect_sidecar_memory
+  sidecar_memory_max = var.connect_sidecar_memory_max
+}
+
+# NATS JetStream job
+
+variable "nats_job_cpu" {
+  type    = number
+  default = 50
+}
+
+variable "nats_job_memory" {
+  type    = number
+  default = 128
+}
+
+variable "nats_job_client_port" {
+  type    = number
+  default = 4222
+}
+
+variable "nats_job_monitoring_port" {
+  type    = number
+  default = 8222
+}
+
+variable "nats_job_count" {
+  type    = number
+  default = 1
+}
+
+variable "nats_jetstream_max_memory" {
+  type    = string
+  default = "64MB"
+}
+
+variable "nats_jetstream_max_file" {
+  type    = string
+  default = "1GB"
+}
+
+module "nats" {
+  source = "./jobs/nats"
+
+  cpu                  = var.nats_job_cpu
+  memory               = var.nats_job_memory
+  client_port          = var.nats_job_client_port
+  monitoring_port      = var.nats_job_monitoring_port
+  group_count          = var.nats_job_count
+  jetstream_max_memory = var.nats_jetstream_max_memory
+  jetstream_max_file   = var.nats_jetstream_max_file
+  volume_source        = nomad_dynamic_host_volume.nats_data.name
+  sidecar_cpu          = var.connect_sidecar_cpu
+  sidecar_memory       = var.connect_sidecar_memory
+  sidecar_memory_max   = var.connect_sidecar_memory_max
 }
 
 # ente server (museum) job
@@ -194,9 +277,12 @@ variable "ente_museum_job_admin_user_id" {
 module "ente_museum" {
   source = "./jobs/ente-museum"
 
-  cpu            = var.ente_museum_job_cpu
-  memory         = var.ente_museum_job_memory
-  group_count    = var.ente_museum_job_count
-  primary_domain = var.ente_museum_primary_domain
-  admin_user_id  = var.ente_museum_job_admin_user_id
+  cpu                = var.ente_museum_job_cpu
+  memory             = var.ente_museum_job_memory
+  group_count        = var.ente_museum_job_count
+  primary_domain     = var.ente_museum_primary_domain
+  admin_user_id      = var.ente_museum_job_admin_user_id
+  sidecar_cpu        = var.connect_sidecar_cpu
+  sidecar_memory     = var.connect_sidecar_memory
+  sidecar_memory_max = var.connect_sidecar_memory_max
 }

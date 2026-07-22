@@ -6,6 +6,12 @@ variable "account_id" {}
 
 variable "group_count" {}
 
+variable "sidecar_cpu" {}
+
+variable "sidecar_memory" {}
+
+variable "sidecar_memory_max" {}
+
 variable "metrics_port" {
   type    = number
   default = 2000
@@ -13,10 +19,13 @@ variable "metrics_port" {
 
 resource "nomad_job" "cloudflared_job" {
   jobspec = templatefile("${path.module}/template.hcl.tftpl", {
-    cpu          = var.cpu
-    memory       = var.memory
-    account_id   = var.account_id
-    count        = var.group_count
-    metrics_port = var.metrics_port
+    cpu                = var.cpu
+    memory             = var.memory
+    account_id         = var.account_id
+    count              = var.group_count
+    metrics_port       = var.metrics_port
+    sidecar_cpu        = var.sidecar_cpu
+    sidecar_memory     = var.sidecar_memory
+    sidecar_memory_max = var.sidecar_memory_max
   })
 }

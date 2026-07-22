@@ -1,0 +1,124 @@
+job "nats" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "nats" {
+    count = ${count}
+
+    volume "nats" {
+      type   = "host"
+      source = "${volume_source}"
+    }
+
+    network {
+      mode = "bridge"
+
+      port "client" {
+        to = ${client_port}
+      }
+
+      port "monitoring" {
+        to = ${monitoring_port}
+      }
+    }
+
+    task "nats" {
+      driver = "docker"
+
+      vault {}
+
+      volume_mount {
+        volume      = "nats"
+        destination = "/data"
+        read_only   = false
+      }
+
+      template {
+        destination = "secrets/nats.conf"
+        change_mode = "restart"
+        perms       = "0400"
+
+        data = <<EOH
+server_name: "nats-{{ env "NOMAD_ALLOC_INDEX" }}"
+port: ${client_port}
+http_port: ${monitoring_port}
+
+jetstream {
+  store_dir: "/data/jetstream"
+  max_memory_store: ${jetstream_max_memory}
+  max_file_store: ${jetstream_max_file}
+}
+
+authorization {
+  {{ with secret "secret/data/nats/server-authorization" -}}
+  users: {{ .Data.data.users_json }}
+  {{- end }}
+}
+EOH
+      }
+
+      config {
+        image = "nats:2.14.3-alpine"
+        args  = ["--config", "/secrets/nats.conf"]
+      }
+
+      resources {
+        cpu    = ${cpu}
+        memory = ${memory}
+      }
+
+      restart {
+        attempts = 10
+        interval = "5m"
+        delay    = "15s"
+        mode     = "delay"
+      }
+    }
+
+    service {
+      name = "nats"
+      task = "nats"
+      port = "${client_port}"
+
+      check {
+        name     = "nats-jetstream-ready"
+        type     = "http"
+        expose   = true
+        port     = "monitoring"
+        path     = "/healthz?js-enabled-only=true"
+        interval = "15s"
+        timeout  = "3s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            transparent_proxy {}
+          }
+        }
+
+        sidecar_task {
+          resources {
+            cpu        = ${sidecar_cpu}
+            memory     = ${sidecar_memory}
+            memory_max = ${sidecar_memory_max}
+          }
+        }
+      }
+    }
+
+    service {
+      name = "nats-monitoring"
+      task = "nats"
+      port = "${monitoring_port}"
+    }
+  }
+
+  update {
+    max_parallel       = 1
+    min_healthy_time   = "10s"
+    healthy_deadline   = "3m"
+    auto_revert        = true
+    canary             = 0
+  }
+}

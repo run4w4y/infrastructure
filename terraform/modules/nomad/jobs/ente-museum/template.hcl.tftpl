@@ -53,6 +53,14 @@ job "ente" {
             }
           }
         }
+
+        sidecar_task {
+          resources {
+            cpu        = ${sidecar_cpu}
+            memory     = ${sidecar_memory}
+            memory_max = ${sidecar_memory_max}
+          }
+        }
       }
     }
 
@@ -62,7 +70,8 @@ job "ente" {
       vault {}
 
       config {
-        image = "ghcr.io/ente-io/server:latest"
+        image      = "ghcr.io/ente-io/server@sha256:e1b615b261391b79a9d27f00783f70b909a18c67960cc038846a9e928fe79903"
+        force_pull = false
         volumes = [
           "local/museum.yaml:/museum.yaml"
         ]

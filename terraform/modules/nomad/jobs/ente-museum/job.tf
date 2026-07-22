@@ -18,14 +18,23 @@ variable "primary_domain" {}
 
 variable "admin_user_id" {}
 
+variable "sidecar_cpu" {}
+
+variable "sidecar_memory" {}
+
+variable "sidecar_memory_max" {}
+
 resource "nomad_job" "ente_museum_job" {
   jobspec = templatefile("${path.module}/template.hcl.tftpl", {
-    cpu            = var.cpu
-    memory         = var.memory
-    count          = var.group_count
-    http_port      = var.http_port
-    metrics_port   = var.metrics_port
-    primary_domain = var.primary_domain
-    admin_user_id  = var.admin_user_id
+    cpu                = var.cpu
+    memory             = var.memory
+    count              = var.group_count
+    http_port          = var.http_port
+    metrics_port       = var.metrics_port
+    primary_domain     = var.primary_domain
+    admin_user_id      = var.admin_user_id
+    sidecar_cpu        = var.sidecar_cpu
+    sidecar_memory     = var.sidecar_memory
+    sidecar_memory_max = var.sidecar_memory_max
   })
 }

@@ -23,3 +23,21 @@ resource "minio_ilm_policy" "share" {
     expiration = "7d"
   }
 }
+
+resource "minio_s3_bucket" "cv_objects" {
+  bucket = local.cv_objects_bucket
+  acl    = "private"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "minio_s3_bucket" "cv_facts" {
+  bucket = local.cv_facts_bucket
+  acl    = "private"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}

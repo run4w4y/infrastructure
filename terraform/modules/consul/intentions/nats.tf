@@ -1,10 +1,5 @@
-resource "consul_config_entry_service_intentions" "postgres_intentions" {
-  name = "postgres"
-
-  sources {
-    name   = "ente-museum"
-    action = "allow"
-  }
+resource "consul_config_entry_service_intentions" "nats_intentions" {
+  name = "nats"
 
   sources {
     name   = "cv-registry"

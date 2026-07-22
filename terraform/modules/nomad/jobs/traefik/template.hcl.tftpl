@@ -104,6 +104,14 @@ EOH
             transparent_proxy {}
           }
         }
+
+        sidecar_task {
+          resources {
+            cpu        = ${sidecar_cpu}
+            memory     = ${sidecar_memory}
+            memory_max = ${sidecar_memory_max}
+          }
+        }
       }
     }
 

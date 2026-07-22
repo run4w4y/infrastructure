@@ -7,6 +7,11 @@ inputs = {
   consul_address = get_env("CONSUL_HTTP_ADDR")
   nomad_address  = get_env("NOMAD_ADDR")
 
+  # Nomad otherwise reserves 250 MHz and 128 MiB for every Envoy sidecar.
+  connect_sidecar_cpu        = 50
+  connect_sidecar_memory     = 64
+  connect_sidecar_memory_max = 128
+
   # Minio job
   minio_job_cpu            = 256
   minio_job_memory         = 1024
@@ -37,6 +42,15 @@ inputs = {
   postgres_job_count           = 1
   postgres_job_max_connections = 30
   postgres_job_db_name         = "default_db"
+
+  # NATS JetStream job
+  nats_job_cpu              = 50
+  nats_job_memory           = 128
+  nats_job_client_port      = 4222
+  nats_job_monitoring_port  = 8222
+  nats_job_count            = 1
+  nats_jetstream_max_memory = "64MB"
+  nats_jetstream_max_file   = "1GB"
 
   # Ente server (museum) job
   ente_museum_job_cpu           = 400

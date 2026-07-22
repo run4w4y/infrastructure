@@ -6,10 +6,8 @@ job "minio" {
     count = ${count}
 
     volume "minio" {
-      type = "host"
+      type   = "host"
       source = "${volume_source}"
-      access_mode = "single-node-writer"
-      attachment_mode = "file-system"
     }
 
     network {
@@ -93,6 +91,14 @@ EOH
         sidecar_service {
           proxy {
             transparent_proxy {}
+          }
+        }
+
+        sidecar_task {
+          resources {
+            cpu        = ${sidecar_cpu}
+            memory     = ${sidecar_memory}
+            memory_max = ${sidecar_memory_max}
           }
         }
       }

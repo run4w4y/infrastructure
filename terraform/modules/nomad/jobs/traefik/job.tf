@@ -12,6 +12,12 @@ variable "primary_domain" {}
 
 variable "group_count" {}
 
+variable "sidecar_cpu" {}
+
+variable "sidecar_memory" {}
+
+variable "sidecar_memory_max" {}
+
 variable "dashboard_rule" {
   type        = string
   description = "Dashboard router rule"
@@ -20,13 +26,16 @@ variable "dashboard_rule" {
 
 resource "nomad_job" "traefik_job" {
   jobspec = templatefile("${path.module}/template.hcl.tftpl", {
-    cpu            = var.cpu
-    memory         = var.memory
-    http_port      = var.http_port
-    https_port     = var.https_port
-    dashboard_port = var.dashboard_port
-    primary_domain = var.primary_domain
-    count          = var.group_count
-    dashboard_rule = var.dashboard_rule
+    cpu                = var.cpu
+    memory             = var.memory
+    http_port          = var.http_port
+    https_port         = var.https_port
+    dashboard_port     = var.dashboard_port
+    primary_domain     = var.primary_domain
+    count              = var.group_count
+    dashboard_rule     = var.dashboard_rule
+    sidecar_cpu        = var.sidecar_cpu
+    sidecar_memory     = var.sidecar_memory
+    sidecar_memory_max = var.sidecar_memory_max
   })
 }

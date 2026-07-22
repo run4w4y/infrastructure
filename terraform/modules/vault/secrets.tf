@@ -73,6 +73,25 @@ resource "vault_kv_secret_v2" "postgres_secret" {
   })
 }
 
+# NATS server bootstrap credentials. Application identities are owned by the
+# dedicated NATS module, just like PostgreSQL and MinIO client identities are
+# owned by their service modules.
+
+resource "random_password" "nats_root_password" {
+  length  = 32
+  special = false
+}
+
+resource "vault_kv_secret_v2" "nats_root_credentials" {
+  mount = vault_mount.kvv2.path
+  name  = "nats/root-credentials"
+  data_json = jsonencode({
+    username      = "root"
+    password      = random_password.nats_root_password.result
+    password_hash = random_password.nats_root_password.bcrypt_hash
+  })
+}
+
 # ente secrets
 
 resource "random_id" "ente_encryption_key" {

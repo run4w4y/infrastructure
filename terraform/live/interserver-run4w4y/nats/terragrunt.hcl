@@ -1,11 +1,9 @@
 terraform {
-  source = "../../../modules/postgres"
+  source = "../../../modules/nats"
 }
 
 inputs = {
-  vault_address    = get_env("VAULT_ADDR")
-  postgres_address = get_env("POSTGRES_ADDRESS", "127.0.0.1")
-  postgres_port    = get_env("POSTGRES_PORT", "5432")
+  vault_address = get_env("VAULT_ADDR")
 }
 
 generate "backend" {
@@ -19,7 +17,7 @@ terraform {
 
     workspaces {
       project = "${get_env("TF_CLOUD_PROJECT")}"
-      name    = "interserver-run4w4y-postgres"
+      name    = "interserver-run4w4y-nats"
     }
   }
 }
