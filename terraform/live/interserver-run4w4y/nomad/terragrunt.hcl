@@ -52,6 +52,15 @@ inputs = {
   nats_jetstream_max_memory = "64MB"
   nats_jetstream_max_file   = "1GB"
 
+  # Generic headless Chromium service
+  chromium_job_image      = "chromedp/headless-shell:151.0.7922.34@sha256:88359186a9024c4de0b0245c7001e39d5609e0aa0dafab3a0914e9419f258e28"
+  chromium_job_cpu        = 200
+  chromium_job_memory     = 512
+  chromium_job_memory_max = 1024
+  chromium_job_port       = 9222
+  chromium_job_count      = 1
+  chromium_job_shm_size   = 536870912
+
   # Ente server (museum) job
   ente_museum_job_cpu           = 400
   ente_museum_job_memory        = 512

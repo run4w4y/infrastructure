@@ -45,10 +45,11 @@ Provision the foundations in this order:
    credentials under their owning Nomad job paths. These runtime users can
    publish or consume only; they cannot manage JetStream topology.
 5. `consul`: install intentions for `cv-registry`, `cv-web`,
-   `cv-pdf-worker`, and NATS.
-6. `nomad`: deploy the persistent single-node NATS JetStream service. The job
-   reads only its server authorization record under `secret/data/nats`; the
-   record contains hashes rather than duplicated plaintext client passwords.
+   `cv-pdf-worker`, NATS, and the private Chromium CDP service.
+6. `nomad`: deploy the persistent single-node NATS JetStream service and the
+   generic headless Chromium service. The NATS job reads only its server
+   authorization record under `secret/data/nats`; the record contains hashes
+   rather than duplicated plaintext client passwords.
 
 The CV repository owns the `cv-listing-checker` periodic Nomad Pack. This
 repository grants that job a PostgreSQL Connect intention and publishes
@@ -95,6 +96,17 @@ cd ../nomad
 terragrunt apply \
   -target=nomad_dynamic_host_volume.nats_data \
   -target=module.nats
+```
+
+The `chromium` allocation uses the upstream `chromedp/headless-shell` image
+pinned by version and digest. It exposes Chrome DevTools Protocol port 9222
+only through Consul Connect; the sole allowed client is `cv-pdf-worker`.
+There is no custom browser image or CV application code in that allocation.
+Deploy it after applying the Consul intentions:
+
+```sh
+cd terraform/live/interserver-run4w4y/nomad
+terragrunt apply -target=module.chromium
 ```
 
 Once NATS is healthy, apply `terraform/live/prod/jetstream` from the adjacent

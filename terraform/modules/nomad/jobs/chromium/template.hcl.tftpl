@@ -1,0 +1,81 @@
+job "chromium" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "chromium" {
+    count = ${count}
+
+    network {
+      mode = "bridge"
+    }
+
+    task "chromium" {
+      driver = "docker"
+
+      config {
+        image      = "${image}"
+        force_pull = false
+        shm_size   = ${shm_size}
+      }
+
+      resources {
+        cpu        = ${cpu}
+        memory     = ${memory}
+        memory_max = ${memory_max}
+      }
+
+      restart {
+        attempts = 5
+        interval = "10m"
+        delay    = "15s"
+        mode     = "delay"
+      }
+
+      kill_timeout = "30s"
+    }
+
+    service {
+      name         = "chromium"
+      task         = "chromium"
+      address_mode = "alloc"
+      port         = ${port}
+
+      check {
+        name         = "chromium-cdp-ready"
+        type         = "http"
+        address_mode = "alloc"
+        port         = ${port}
+        path         = "/json/version"
+        interval     = "10s"
+        timeout      = "2s"
+      }
+
+      connect {
+        sidecar_service {
+          disable_default_tcp_check = true
+
+          proxy {
+            local_service_address = "127.0.0.1"
+            local_service_port    = ${port}
+          }
+        }
+
+        sidecar_task {
+          resources {
+            cpu        = ${sidecar_cpu}
+            memory     = ${sidecar_memory}
+            memory_max = ${sidecar_memory_max}
+          }
+        }
+      }
+    }
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "10s"
+      healthy_deadline = "3m"
+      auto_revert      = true
+      canary           = 0
+    }
+  }
+}

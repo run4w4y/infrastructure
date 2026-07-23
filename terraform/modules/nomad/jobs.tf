@@ -248,6 +248,60 @@ module "nats" {
   sidecar_memory_max   = var.connect_sidecar_memory_max
 }
 
+# Generic headless Chromium service
+
+variable "chromium_job_image" {
+  description = "Pinned chromedp/headless-shell image reference, including sha256 digest."
+  type        = string
+  default     = "chromedp/headless-shell:151.0.7922.34@sha256:88359186a9024c4de0b0245c7001e39d5609e0aa0dafab3a0914e9419f258e28"
+}
+
+variable "chromium_job_cpu" {
+  type    = number
+  default = 200
+}
+
+variable "chromium_job_memory" {
+  type    = number
+  default = 512
+}
+
+variable "chromium_job_memory_max" {
+  type    = number
+  default = 1024
+}
+
+variable "chromium_job_port" {
+  type    = number
+  default = 9222
+}
+
+variable "chromium_job_count" {
+  type    = number
+  default = 1
+}
+
+variable "chromium_job_shm_size" {
+  description = "Chromium shared-memory allocation in bytes."
+  type        = number
+  default     = 536870912
+}
+
+module "chromium" {
+  source = "./jobs/chromium"
+
+  image              = var.chromium_job_image
+  cpu                = var.chromium_job_cpu
+  memory             = var.chromium_job_memory
+  memory_max         = var.chromium_job_memory_max
+  port               = var.chromium_job_port
+  group_count        = var.chromium_job_count
+  shm_size           = var.chromium_job_shm_size
+  sidecar_cpu        = var.connect_sidecar_cpu
+  sidecar_memory     = var.connect_sidecar_memory
+  sidecar_memory_max = var.connect_sidecar_memory_max
+}
+
 # ente server (museum) job
 
 variable "ente_museum_job_cpu" {
