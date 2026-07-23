@@ -48,8 +48,9 @@ resource "minio_iam_user_policy_attachment" "share" {
   policy_name = minio_iam_policy.share.id
 }
 
-# The registry owns generated artifacts and reads published facts through its
-# same-origin API. It deliberately cannot modify the facts bucket.
+# The registry owns generated artifacts and is the only writer to the facts
+# bucket. Facts publication is authenticated by the registry API; the registry
+# can create immutable objects and update current.json, but cannot delete facts.
 
 data "minio_iam_policy_document" "cv_registry" {
   statement {
@@ -72,9 +73,9 @@ data "minio_iam_policy_document" "cv_registry" {
   }
 
   statement {
-    sid       = "CvFactsRead"
+    sid       = "CvFactsReadWrite"
     effect    = "Allow"
-    actions   = ["s3:GetObject"]
+    actions   = ["s3:GetObject", "s3:PutObject"]
     principal = "*"
     resources = ["arn:aws:s3:::${local.cv_facts_bucket}/*"]
   }
