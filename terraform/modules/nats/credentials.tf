@@ -39,6 +39,18 @@ locals {
         subscribe = ["_INBOX.>"]
       }
     }
+    cv_cache_invalidator = {
+      secret_path = "cv-cache-invalidator/nats-credentials"
+      username    = "cv-cache-invalidator"
+      permissions = {
+        publish = [
+          "$JS.API.CONSUMER.INFO.REGISTRY_EVENTS.registry-cache-invalidator",
+          "$JS.API.CONSUMER.MSG.NEXT.REGISTRY_EVENTS.registry-cache-invalidator",
+          "$JS.ACK.REGISTRY_EVENTS.registry-cache-invalidator.>",
+        ]
+        subscribe = ["_INBOX.>"]
+      }
+    }
   }
 }
 

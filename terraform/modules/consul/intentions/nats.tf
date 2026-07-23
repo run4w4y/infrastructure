@@ -17,6 +17,11 @@ resource "consul_config_entry_service_intentions" "nats_intentions" {
   }
 
   sources {
+    name   = "cv-cache-invalidator"
+    action = "allow"
+  }
+
+  sources {
     name   = "operator-root"
     action = "allow"
   }

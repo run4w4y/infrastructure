@@ -2,7 +2,7 @@ resource "consul_config_entry_service_intentions" "cv_registry_intentions" {
   name = "cv-registry"
 
   sources {
-    name   = "cv-registry-web"
+    name   = "traefik"
     action = "allow"
   }
 
