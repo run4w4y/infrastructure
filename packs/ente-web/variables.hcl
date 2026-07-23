@@ -90,6 +90,18 @@ variable "resources" {
   })
   default = {
     cpu    = 100,
-    memory = 128
+    memory = 192
+  }
+}
+
+variable "sidecar_resources" {
+  description = "Resources assigned to each Connect sidecar"
+  type = object({
+    cpu    = number
+    memory = number
+  })
+  default = {
+    cpu    = 50
+    memory = 64
   }
 }

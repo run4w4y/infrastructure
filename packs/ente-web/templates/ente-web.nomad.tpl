@@ -17,6 +17,7 @@ job [[ .my.job_name | quote ]] {
     }
 
     [[- $subdomains := .my.subdomains -]]
+    [[- $sidecar_resources := .my.sidecar_resources -]]
     [[ range keys .my.subdomains ]]
     service {
       name = "ente-web-[[ . ]]"
@@ -34,6 +35,13 @@ job [[ .my.job_name | quote ]] {
         sidecar_service {
           proxy {}
         }
+
+        sidecar_task {
+          resources {
+            cpu    = [[ $sidecar_resources.cpu ]]
+            memory = [[ $sidecar_resources.memory ]]
+          }
+        }
       }
     }
     [[ end ]]
@@ -44,6 +52,11 @@ job [[ .my.job_name | quote ]] {
       vault {}
 
       [[ template "docker_config" . ]]
+
+      resources {
+        cpu    = [[ .my.resources.cpu ]]
+        memory = [[ .my.resources.memory ]]
+      }
     }
 
     restart {
