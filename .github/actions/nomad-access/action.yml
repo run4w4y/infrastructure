@@ -1,0 +1,14 @@
+name: Private Nomad access
+description: Forward only the native Nomad API through a restricted SSH account.
+inputs:
+  ssh-private-key:
+    description: Repository-specific forwarding key.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Open verified private Nomad connection
+      shell: bash
+      env:
+        NOMAD_CI_SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+      run: python3 "$GITHUB_ACTION_PATH/connect.py"
