@@ -59,9 +59,13 @@ jobs:
           unzip -q np.zip -d ./np
           mv ./np/nomad-pack /usr/local/bin/nomad-pack
 
+      - name: Open private Nomad connection
+        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+        with:
+          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+
       - name: Deploy Nomad Pack
         env:
-          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
 
           docker_image_tag: ${{ needs.build-ente.outputs.docker_image_tag }}
@@ -74,3 +78,13 @@ jobs:
             --var "docker_image_username=${docker_image_username}" \
             --var "docker_image_password=${docker_image_password}" \
             --var "docker_image_name=${docker_image_name}"
+
+      - name: Close private Nomad connection
+        if: always()
+        run: |
+          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
+            python3 "$CLUSTER_NOMAD_ACTION/close.py"
+            test ! -e "$CLUSTER_NOMAD_CONTROL"
+            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
+            echo "Private Nomad connection cleanup verified"
+          fi
