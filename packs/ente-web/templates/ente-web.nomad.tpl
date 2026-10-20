@@ -8,34 +8,49 @@ job [[ .my.job_name | quote ]] {
     network {
       mode = "bridge"
 
-      [[- $ports := .my.ports -]]
+      port "gateway" {
+        to = 3005
+      }
+
       [[ range keys .my.ports ]]
-      port [[ quote . ]] {
-        to = [[ index $ports . ]]
+      port [[ . | quote ]] {
+        to = [[ index $.my.ports . ]]
       }
       [[ end ]]
     }
 
-    [[- $subdomains := .my.subdomains -]]
-    [[- $sidecar_resources := .my.sidecar_resources -]]
-    [[ range keys .my.subdomains ]]
+    [[ $ports := .my.ports ]]
+    [[ $subdomains := .my.subdomains ]]
+    [[ $sidecar_resources := .my.sidecar_resources ]]
     service {
-      name = "ente-web-[[ . ]]"
-      task = "ente-web"
-      port = [[ index $ports . | quote ]]
+      name = "ente-web"
+      task = "ente-web-gateway"
+      port = "3005"
 
       tags = [
         "traefik.enable=true",
         "traefik.consulcatalog.connect=true",
-        "traefik.subdomain=[[ index $subdomains . ]]",
-        "traefik.http.routers.ente-web-[[ . ]].entrypoints=web"
+        [[ range keys .my.subdomains ]]
+        "traefik.http.routers.ente-web-[[ . ]].rule=Host(`[[ index $subdomains . ]].[[ $.my.primary_domain ]]`)",
+        "traefik.http.routers.ente-web-[[ . ]].entrypoints=web",
+        "traefik.http.routers.ente-web-[[ . ]].service=ente-web",
+        [[ end ]]
       ]
 
-      connect {
-        sidecar_service {
-          proxy {}
-        }
+      check {
+        name     = "ente-web-gateway-http"
+        task     = "ente-web-gateway"
+        type     = "http"
+        port     = "gateway"
+        path     = "/healthz"
+        interval = "15s"
+        timeout  = "3s"
+        expose   = true
 
+      }
+
+      connect {
+        sidecar_service {}
         sidecar_task {
           resources {
             cpu    = [[ $sidecar_resources.cpu ]]
@@ -44,20 +59,130 @@ job [[ .my.job_name | quote ]] {
         }
       }
     }
-    [[ end ]]
 
-    task "ente-web" {
+    task "ente-web-gateway" {
       driver = "docker"
 
-      vault {}
+      service {
+        name = "ente-web-gateway-health"
+        port = "gateway"
+        tags = ["traefik.enable=false"]
 
-      [[ template "docker_config" . ]]
+        check {
+          name     = "ente-web-gateway-liveness"
+          type     = "http"
+          path     = "/healthz"
+          interval = "15s"
+          timeout  = "3s"
+
+          check_restart {
+            limit = 3
+            grace = "30s"
+          }
+        }
+      }
+
+      config {
+        image   = [[ .my.gateway_image | quote ]]
+        command = "nginx"
+        args    = ["-c", "/local/nginx.conf", "-g", "daemon off;"]
+      }
+
+      template {
+        destination = "local/nginx.conf"
+        change_mode = "restart"
+        data = <<EOH
+worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 512; }
+http {
+  access_log off;
+  server_tokens off;
+  keepalive_timeout 15s;
+  client_body_temp_path /tmp/client_temp;
+  proxy_temp_path /tmp/proxy_temp;
+  proxy_http_version 1.1;
+  proxy_set_header Connection "";
+  proxy_set_header Host $http_host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+  proxy_buffering off;
+
+  server {
+    listen 3005 default_server;
+    server_name _;
+    location = /healthz { return 200 "ok\n"; }
+    location / { return 421; }
+  }
+  [[ range keys .my.subdomains ]]
+  upstream [[ . ]] {
+    server 127.0.0.1:[[ index $ports . ]];
+    keepalive 2;
+  }
+  server {
+    listen 3005;
+    server_name [[ index $subdomains . ]].[[ $.my.primary_domain ]];
+    location / { proxy_pass http://[[ . ]]; }
+  }
+  [[ end ]]
+}
+EOH
+      }
 
       resources {
-        cpu    = [[ .my.resources.cpu ]]
-        memory = [[ .my.resources.memory ]]
+        cpu    = [[ .my.gateway_resources.cpu ]]
+        memory = [[ .my.gateway_resources.memory ]]
       }
     }
+
+    [[ range keys .my.subdomains ]]
+    task "ente-web-[[ . ]]" {
+      driver = "docker"
+
+      service {
+        name = "ente-web-[[ . ]]"
+        port = [[ . | quote ]]
+        tags = ["traefik.enable=false"]
+
+        check {
+          name     = "ente-web-[[ . ]]-http"
+          type     = "http"
+          path     = [[ if eq . "photos" ]]"/gallery"[[ else ]]"/"[[ end ]]
+          interval = "15s"
+          timeout  = "3s"
+
+          check_restart {
+            limit = 3
+            grace = "30s"
+          }
+        }
+      }
+
+      config {
+        image = "[[ $.my.docker_image_registry_url | trimSuffix "/" ]]/[[ $.my.docker_image_name ]]:[[ $.my.docker_image_tag ]]"
+        command = "/usr/local/bin/serve"
+        args = [
+          "/app/[[ if eq . "albums" ]]photos[[ else ]][[ . ]][[ end ]]",
+          "-l", "tcp://0.0.0.0:[[ index $ports . ]]"
+        ]
+
+        auth = {
+          [[ if empty $.my.docker_image_username | not -]]
+          username = [[ $.my.docker_image_username | quote ]]
+          [[- end ]]
+          [[ if empty $.my.docker_image_password | not -]]
+          password = [[ $.my.docker_image_password | quote ]]
+          [[- end ]]
+        }
+      }
+
+      resources {
+        cpu    = [[ $.my.resources.cpu ]]
+        memory = [[ $.my.resources.memory ]]
+      }
+    }
+    [[ end ]]
 
     restart {
       attempts = 10

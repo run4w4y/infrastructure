@@ -83,19 +83,19 @@ variable "docker_image_password" {
 }
 
 variable "resources" {
-  description = "Resources assigned to each replica of the job"
+  description = "Resources assigned to each of the five web server tasks per replica"
   type = object({
     cpu    = number
     memory = number
   })
   default = {
-    cpu    = 100,
-    memory = 192
+    cpu    = 20,
+    memory = 128
   }
 }
 
 variable "sidecar_resources" {
-  description = "Resources assigned to each Connect sidecar"
+  description = "Resources assigned to the shared Connect sidecar"
   type = object({
     cpu    = number
     memory = number
@@ -103,5 +103,29 @@ variable "sidecar_resources" {
   default = {
     cpu    = 50
     memory = 64
+  }
+}
+
+variable "primary_domain" {
+  description = "Domain used by the five public web routes"
+  type        = string
+  default     = "example.com"
+}
+
+variable "gateway_image" {
+  description = "Pinned Nginx image used to route the shared mesh endpoint to the five web tasks"
+  type        = string
+  default     = "nginx@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5"
+}
+
+variable "gateway_resources" {
+  description = "Resources assigned to the shared HTTP router"
+  type = object({
+    cpu    = number
+    memory = number
+  })
+  default = {
+    cpu    = 20
+    memory = 32
   }
 }
