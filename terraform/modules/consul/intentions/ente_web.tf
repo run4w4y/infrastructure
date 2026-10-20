@@ -17,3 +17,18 @@ resource "consul_config_entry_service_intentions" "ente_web_intentions" {
     action = "allow"
   }
 }
+
+# Keep the previous destinations until the shared endpoint and rollback pass.
+resource "consul_config_entry_service_intentions" "ente_web_shared_intentions" {
+  name = "ente-web"
+
+  sources {
+    name   = "traefik"
+    action = "allow"
+  }
+
+  sources {
+    name   = "operator-root"
+    action = "allow"
+  }
+}
