@@ -26,3 +26,12 @@ resource "vault_policy" "traefik" {
     }
   EOT
 }
+
+resource "vault_policy" "openviking_client_provisioner" {
+  name   = "openviking-client-provisioner"
+  policy = <<-EOT
+    path "secret/data/openviking/client" {
+      capabilities = ["read"]
+    }
+  EOT
+}

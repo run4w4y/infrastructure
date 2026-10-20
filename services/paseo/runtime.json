@@ -1,0 +1,10 @@
+{
+  "runtime": "/nix/store/8k94zswbr1jx3303m4n0qm2k5938i4b9-my-pi-runtime-0.1.0",
+  "resources": "/nix/store/gf9cw41b8f3qg687c833w85wmhczz5ls-my-pi-resources",
+  "node": "/nix/store/lfaydgacdyngci7p60s8wwvgdm74fjkx-nodejs-24.19.0/bin/node",
+  "documents": "/nix/store/97nn6cwnsijljk6c8601k532zcmdwxmj-paseo-document-viewer-0.3.0",
+  "nono": "/nix/store/r8cmrwab4079vmxijibj79c2f1xmnzlb-nono-0.80.0/bin/nono",
+  "enforcement": "/nix/store/40g2cglxwdihvjr2sx8wz29ccb8zw6ik-my-pi-enforcement-tools",
+  "profile": "/nix/store/v304rvx17rvb46m0zmnxwpll1a3rhmmh-my-pi-nono.json",
+  "instructions": "/nix/store/gr1m47bwi77ssfj4cgxfiphp8vznvqa2-my-pi-instructions.md"
+}

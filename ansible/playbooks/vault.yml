@@ -12,5 +12,23 @@
     vault_domain: "consul"
     vault_backend: consul
     vault_ui: yes
+    vault_address: "0.0.0.0"
+    vault_tls_disable: false
+    vault_tls_copy_keys: false
+    vault_tls_certs_path: /etc/cluster-pki/vault/current
+    vault_tls_private_path: /etc/cluster-pki/vault/current
+    vault_tls_cert_file: cert.pem
+    vault_tls_key_file: key.pem
+    vault_tls_min_version: tls12
+    vault_listener_localhost_enable: false
+    # Vault 1.19.3 drops implicit Consul registration on SIGHUP.
+    vault_service_registration_consul_enable: true
+    vault_service_registration_consul_token: "{{ vault_consul_token | default('') }}"
+    vault_consul: consul.service.consul:8501
+    vault_consul_scheme: https
+    vault_backend_consul: vault-consul-storage.hcl.j2
+    vault_service_registration_consul_address: consul.service.consul:8501
+    vault_service_registration_consul_scheme: https
+    vault_service_registration_consul_template: vault-consul-registration.hcl.j2
     vault_zip_url: "https://hashicorp-releases.yandexcloud.net/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
     vault_checksum_file_url: "https://hashicorp-releases.yandexcloud.net/vault/{{ vault_version }}/vault_{{ vault_version}}_SHA256SUMS"

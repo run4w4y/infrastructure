@@ -14,6 +14,16 @@ variable "infisical_project_id" {
   }
 }
 
+variable "domain_name" {
+  type        = string
+  description = "Public DNS domain used by the protected administrative HTTPS endpoints."
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$", var.domain_name))
+    error_message = "domain_name must be a DNS name without a scheme, path, or trailing dot."
+  }
+}
+
 variable "environment_slug" {
   type        = string
   description = "Infisical environment slug where the repository secret shape should exist."

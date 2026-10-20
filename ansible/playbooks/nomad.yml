@@ -12,9 +12,29 @@
       tags:
         - docker
         - nomad
+  pre_tasks:
+    - name: Require the existing Infisical Nomad gossip key
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.env', 'NOMAD_GOSSIP_KEY') | length == 44
+        fail_msg: Load NOMAD_GOSSIP_KEY from the infra project's /ansible folder before bootstrap.
+      no_log: true
+    - name: Check for configuration owned by the retired TLS migration
+      ansible.builtin.stat:
+        path: /etc/nomad.d/zz-cluster-security.json
+      register: legacy_nomad_security
+
+    - name: Require the security settings to use the normal Nomad configuration
+      ansible.builtin.assert:
+        that:
+          - not legacy_nomad_security.stat.exists
+        fail_msg: Consolidate and validate the existing TLS overlay before applying the normal Nomad role; its restart handlers must not perform this one-time adoption.
   vars:
     nomad_version: 1.10.0
-    nomad_allow_purge_config: yes
+    nomad_allow_purge_config: no
+    nomad_leave_on_terminate: false
+    nomad_encrypt_enable: true
+    nomad_encrypt: "{{ lookup('ansible.builtin.env', 'NOMAD_GOSSIP_KEY') }}"
     nomad_datacenter: "dc1"
     nomad_domain: "consul"
     nomad_bind_address: "0.0.0.0"
@@ -26,7 +46,7 @@
     nomad_consul_ca_file: /etc/consul/ssl/ca-consul.pem
     nomad_consul_cert_file: /etc/consul/ssl/cert-consul.pem
     nomad_consul_key_file: /etc/consul/ssl/cert-consul-key.pem
-    nomad_verify_server_hostname: false
+    nomad_verify_server_hostname: true
 
     nomad_acl_enabled: yes
     nomad_raft_protocol: 3
@@ -40,7 +60,10 @@
 
     # Vault integration
     nomad_vault_enabled: yes
-    nomad_vault_address: http://vault.service.consul:8200
+    nomad_vault_address: https://vault.service.consul:8200
+    nomad_vault_ca_file: /usr/local/share/ca-certificates/cluster-control.crt
+    nomad_vault_tls_server_name: vault.service.consul
+    nomad_vault_tls_skip_verify: false
     nomad_vault_create_from_role: "nomad-workloads"
 
     nomad_options: { 'driver.raw_exec.enable': '1' }
@@ -64,11 +87,25 @@
         log_level: "debug"
 
     nomad_config_custom:
+      leave_on_terminate: false
+      tls:
+        - http: true
+          rpc: true
+          ca_file: /usr/local/share/ca-certificates/cluster-control.crt
+          cert_file: /etc/cluster-pki/nomad/current/cert.pem
+          key_file: /etc/cluster-pki/nomad/current/key.pem
+          verify_https_client: false
+          verify_server_hostname: true
+          tls_min_version: tls12
+
+      server:
+        - encrypt: "{{ nomad_encrypt }}"
+
       client:
         - cni_path: "{{ nomad_cni_dir | default('/opt/cni/bin') }}"
 
       consul:
-        - grpc_addres: consul.service.dc1.consul:8503 # use the tls grpc listener
+        - grpc_address: consul.service.dc1.consul:8503 # use the tls grpc listener
           service_auth_method: "nomad-workloads"
           task_auth_method: "nomad-workloads"
 
@@ -82,6 +119,10 @@
 
       vault:
         - enabled: true
+          address: https://vault.service.consul:8200
+          ca_file: /usr/local/share/ca-certificates/cluster-control.crt
+          tls_server_name: vault.service.consul
+          tls_skip_verify: false
           jwt_auth_backend_path: "jwt-nomad"
           default_identity:
             - aud: ["vault.io"]

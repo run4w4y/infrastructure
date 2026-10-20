@@ -1,0 +1,11 @@
+storage "consul" {
+  address = {{ vault_consul | to_json }}
+  path = {{ vault_consul_path | to_json }}
+  service = {{ vault_consul_service | to_json }}
+{% if vault_consul_token | default('', true) | length > 0 %}
+  token = {{ vault_consul_token | to_json }}
+{% endif %}
+  scheme = "https"
+  tls_ca_file = "/usr/local/share/ca-certificates/cluster-control.crt"
+  tls_skip_verify = "false"
+}

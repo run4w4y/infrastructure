@@ -9,7 +9,7 @@ variable "cloudflare_account_id" {
 }
 
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token with permissions for zone management, DNS records, tunnels, and Pages projects"
+  description = "Cloudflare API token with permissions for zone management, DNS records, tunnels, Pages, and Access management"
   type        = string
   sensitive   = true
 }
@@ -47,13 +47,32 @@ variable "ingress_rules" {
   type = list(object({
     hostname = string
     service  = string
+    origin_request = optional(object({
+      ca_pool                = string
+      origin_server_name     = string
+      connect_timeout        = optional(number, 10)
+      keep_alive_connections = optional(number, 100)
+      keep_alive_timeout     = optional(number, 90)
+      no_happy_eyeballs      = optional(bool, false)
+      no_tls_verify          = optional(bool, false)
+      proxy_type             = optional(string, "")
+      tcp_keep_alive         = optional(number, 30)
+      tls_timeout            = optional(number, 10)
+    }))
   }))
 
-  default = [
-    { hostname = "nomad", service = "http://127.0.0.1:4646" },
-    { hostname = "vault", service = "http://127.0.0.1:8200" },
-    { hostname = "consul", service = "http://127.0.0.1:8500" }
-  ]
+  validation {
+    condition = alltrue([
+      for rule in var.ingress_rules :
+      !contains(["nomad", "vault", "consul"], rule.hostname) || try(
+        startswith(rule.service, "https://") &&
+        length(rule.origin_request.ca_pool) > 0 &&
+        length(rule.origin_request.origin_server_name) > 0,
+        false
+      )
+    ])
+    error_message = "Administrative tunnel routes require verified HTTPS origins."
+  }
 }
 
 variable "pages_projects" {

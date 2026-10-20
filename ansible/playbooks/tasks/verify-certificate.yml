@@ -1,0 +1,59 @@
+---
+- name: Read the certificate that the service must present
+  community.crypto.x509_certificate_info:
+    path: "{{ certificate_expected_path }}"
+  register: certificate_expected
+
+- name: Verify the service presents the expected certificate from the existing CA
+  community.crypto.get_certificate:
+    host: 127.0.0.1
+    port: "{{ certificate_service.port }}"
+    server_name: "{{ certificate_service.names | first }}"
+    ca_cert: "{{ cluster_certificate_ca }}"
+    timeout: 3
+  register: certificate_served
+  until: certificate_served is succeeded and certificate_served.serial_number == certificate_expected.serial_number
+  retries: 15
+  delay: 2
+
+- name: Read the actual served certificate's fingerprint
+  community.crypto.x509_certificate_info:
+    content: "{{ certificate_served.cert }}"
+  register: certificate_served_identity
+
+- name: Require the complete served certificate to match the installed generation
+  ansible.builtin.assert:
+    that:
+      - certificate_served_identity.fingerprints.sha256 == certificate_expected.fingerprints.sha256
+
+- name: Verify API health with certificate and hostname checking
+  ansible.builtin.uri:
+    url: "https://127.0.0.1:{{ certificate_service.port }}{{ certificate_service.health_path }}"
+    ca_path: "{{ cluster_certificate_ca }}"
+    validate_certs: true
+    use_proxy: false
+    timeout: 5
+    status_code: 200
+  register: certificate_health
+  until: certificate_health.status | default(-1) == 200
+  retries: 15
+  delay: 2
+
+- name: Require a live Nomad leader
+  ansible.builtin.assert:
+    that:
+      - certificate_health.json | length > 0
+  when: certificate_service.name == 'nomad'
+
+- name: Require Vault to remain initialized and unsealed
+  ansible.builtin.assert:
+    that:
+      - certificate_health.json.initialized
+      - not certificate_health.json.sealed
+  when: certificate_service.name == 'vault'
+
+- name: Verify Vault remains registered in Consul DNS
+  ansible.builtin.command:
+    argv: [getent, ahostsv4, vault.service.consul]
+  changed_when: false
+  when: certificate_service.name == 'vault'

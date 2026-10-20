@@ -1,0 +1,104 @@
+{
+  "agents": {
+    "providers": {
+      "pi": {
+        "command": [
+          "/app/local-execution-disabled"
+        ],
+        "enabled": false
+      },
+      "claude": {
+        "enabled": false
+      },
+      "codex": {
+        "enabled": false
+      },
+      "copilot": {
+        "enabled": false
+      },
+      "opencode": {
+        "enabled": false
+      },
+      "omp": {
+        "enabled": false
+      },
+      "mock": {
+        "enabled": false
+      },
+      "mock-slow": {
+        "enabled": false
+      },
+      "antigravity": {
+        "enabled": false
+      },
+      "muse": {
+        "enabled": false
+      },
+      "hoplite": {
+        "enabled": false
+      }
+    },
+    "metadataGeneration": {
+      "providers": []
+    }
+  },
+  "pluginsEnabled": true,
+  "plugins": {
+    "my-pi-sandbox": {
+      "source": "directory",
+      "path": "/nix/store/gf9cw41b8f3qg687c833w85wmhczz5ls-my-pi-resources/paseo-plugin",
+      "enabled": true
+    },
+    "quote": {
+      "source": "directory",
+      "path": "/nix/store/8k94zswbr1jx3303m4n0qm2k5938i4b9-my-pi-runtime-0.1.0/node_modules/paseo-quote",
+      "enabled": true
+    },
+    "paseo-document-viewer": {
+      "source": "directory",
+      "path": "/nix/store/97nn6cwnsijljk6c8601k532zcmdwxmj-paseo-document-viewer-0.3.0",
+      "enabled": true
+    }
+  },
+  "version": 1,
+  "daemon": {
+    "listen": "127.0.0.1:6767",
+    "mcp": {
+      "enabled": false,
+      "injectIntoAgents": true
+    },
+    "browserTools": {
+      "enabled": false
+    },
+    "relay": {
+      "enabled": false
+    },
+    "auth": {
+      "password": "__PASEO_PASSWORD_HASH__"
+    },
+    "allowedHosts": [
+      "paseo.4w4y.run",
+      "localhost",
+      "127.0.0.1"
+    ],
+    "trustedProxies": [
+      "127.0.0.1"
+    ],
+    "cors": {
+      "allowedOrigins": [
+        "https://paseo.4w4y.run"
+      ]
+    }
+  },
+  "features": {
+    "webUi": {
+      "enabled": true
+    },
+    "dictation": {
+      "enabled": false
+    },
+    "voiceMode": {
+      "enabled": false
+    }
+  }
+}

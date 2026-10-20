@@ -1,0 +1,147 @@
+job "paseo" {
+  datacenters = ["dc1"]
+  type = "service"
+
+  meta {
+%{ for key, value in meta ~}
+    ${key} = ${jsonencode(value)}
+%{ endfor ~}
+  }
+
+  group "daemon" {
+    count = 1
+    constraint {
+      attribute = "$${node.unique.id}"
+      value = ${jsonencode(node_id)}
+    }
+    network { mode = "bridge" }
+    volume "state" {
+      type = "host"
+      source = ${jsonencode(state_volume)}
+      sticky = true
+      access_mode = "single-node-writer"
+      attachment_mode = "file-system"
+    }
+    task "prepare-state" {
+      driver = "docker"
+      user = "0"
+      lifecycle { hook = "prestart" }
+      volume_mount {
+        volume = "state"
+        destination = "/var/lib/paseo"
+      }
+      config {
+        image = ${jsonencode(image)}
+        force_pull = false
+        entrypoint = ["bash"]
+        args = ["-c", "install -d -m 0700 -o 65534 -g 65534 /var/lib/paseo/{daemon,home,agent,cache,repositories}"]
+        readonly_rootfs = true
+        cap_drop = ["ALL"]
+        cap_add = ["CHOWN", "DAC_OVERRIDE"]
+        security_opt = ["no-new-privileges"]
+      }
+      resources {
+        cpu = 50
+        memory = 32
+      }
+    }
+    task "paseo" {
+      driver = "docker"
+      user = "65534"
+      env { NODE_OPTIONS = ${jsonencode(node_options)} }
+      vault {
+        role = "paseo-bootstrap"
+        env = false
+        disable_file = true
+      }
+      volume_mount {
+        volume = "state"
+        destination = "/var/lib/paseo"
+      }
+      template {
+        destination = "local/config.json"
+        data = ${jsonencode(configuration)}
+        change_mode = "restart"
+        perms = "0400"
+        uid = 65534
+        gid = 65534
+      }
+      config {
+        image = ${jsonencode(image)}
+        force_pull = false
+        init = true
+        readonly_rootfs = true
+        cap_drop = ["ALL"]
+        security_opt = ["no-new-privileges"]
+        pids_limit = 512
+        volumes = ["local/config.json:/var/lib/paseo/daemon/config.json:ro"]
+        mount {
+          type = "tmpfs"
+          target = "/tmp"
+          tmpfs_options { size = 67108864 }
+        }
+      }
+      resources {
+        cpu = 300
+        memory = ${memory_reservation}
+        memory_max = ${memory_limit}
+      }
+      restart {
+        attempts = 5
+        interval = "10m"
+        delay = "15s"
+        mode = "delay"
+      }
+      kill_timeout = "30s"
+      shutdown_delay = "5s"
+      logs {
+        max_files = 3
+        max_file_size = 10
+      }
+    }
+    service {
+      name = "paseo"
+      task = "paseo"
+      port = "6767"
+      tags = [
+        "traefik.enable=true",
+        "traefik.consulcatalog.connect=true",
+        "traefik.subdomain=paseo",
+        "traefik.http.routers.paseo.entrypoints=web"
+      ]
+      check {
+        name = "paseo-http-ready"
+        type = "http"
+        path = "/api/health"
+        expose = true
+        interval = "15s"
+        timeout = "5s"
+        check_restart {
+          limit = 3
+          grace = "120s"
+        }
+      }
+      connect {
+        sidecar_service {
+          proxy {
+            local_service_address = "127.0.0.1"
+            local_service_port = 6767
+          }
+        }
+        sidecar_task {
+          resources {
+            cpu = 50
+            memory = ${sidecar_memory}
+          }
+        }
+      }
+    }
+    update {
+      max_parallel = 1
+      min_healthy_time = "10s"
+      healthy_deadline = "8m"
+      progress_deadline = "12m"
+      auto_revert = true
+    }
+  }
+}

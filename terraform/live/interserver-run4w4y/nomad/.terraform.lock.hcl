@@ -10,10 +10,10 @@ provider "registry.terraform.io/hashicorp/consul" {
 }
 
 provider "registry.terraform.io/hashicorp/nomad" {
-  version     = "2.5.0"
+  version     = "2.6.1"
   constraints = "~> 2.5"
   hashes = [
-    "h1:zr1KDIeeA9cxolDHGE82niSUN4kxkjWBe8pznxKzkJI=",
+    "h1:WeUVRTFX4hjbndw+Iq/hx68Ka8YSvkqwQ5xeRbmZqwc=",
   ]
 }
 
@@ -22,5 +22,13 @@ provider "registry.terraform.io/hashicorp/vault" {
   constraints = "~> 4.0"
   hashes = [
     "h1:aHqgWQhDBMeZO9iUKwJYMlh4q+xNMUlMIcjRbF4d02Y=",
+  ]
+}
+
+provider "registry.terraform.io/infisical/infisical" {
+  version     = "0.16.24"
+  constraints = "0.16.24"
+  hashes = [
+    "h1:R3wSS30GH8AkFwI9a73zM76Zd7kENSUW1MFkEMkaoCM=",
   ]
 }

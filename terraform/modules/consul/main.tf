@@ -19,6 +19,15 @@ variable "consul_address" {
 
 provider "consul" {
   address = var.consul_address
+
+  dynamic "header" {
+    for_each = var.cloudflare_access_headers
+
+    content {
+      name  = header.key
+      value = header.value
+    }
+  }
 }
 
 module "intetions" {

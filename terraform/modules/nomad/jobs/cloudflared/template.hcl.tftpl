@@ -55,6 +55,9 @@ EOH
 
       config {
         image = "cloudflare/cloudflared:2025.4.2"
+        volumes = [
+          "/usr/local/share/ca-certificates/cluster-control.crt:/local/cluster-ca.pem:ro",
+        ]
         args = [
           "tunnel",
           "--config", "/secrets/config.yml",

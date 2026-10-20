@@ -1,0 +1,212 @@
+---
+- name: Manage local cluster certificate renewal
+  hosts: servers
+  become: true
+  gather_facts: false
+  vars:
+    cluster_certificates_collection_directory: /opt/cluster-certificates/collections
+    cluster_certificates_directory: /etc/ansible/cluster-certificates
+    cluster_certificates_collection_version: "2.26.0"
+  tasks:
+    - name: Install the local Ansible runtime prerequisites
+      ansible.builtin.apt:
+        name:
+          - ansible-core
+          - python3-cryptography
+        state: present
+
+    - name: Check the installed certificate collection version
+      ansible.builtin.stat:
+        path: "{{ cluster_certificates_collection_directory }}/ansible_collections/community/crypto/MANIFEST.json"
+      register: certificate_collection_manifest
+
+    - name: Read the installed certificate collection version
+      ansible.builtin.slurp:
+        src: "{{ certificate_collection_manifest.stat.path }}"
+      register: certificate_collection_metadata
+      when: certificate_collection_manifest.stat.exists
+
+    - name: Install the pinned certificate collection
+      ansible.builtin.command:
+        argv:
+          - "/usr/bin/ansible-galaxy"
+          - collection
+          - install
+          - "community.crypto:{{ cluster_certificates_collection_version }}"
+          - --collections-path
+          - "{{ cluster_certificates_collection_directory }}"
+          - --force
+      when: >-
+        not certificate_collection_manifest.stat.exists or
+        (certificate_collection_metadata.content | b64decode | from_json).collection_info.version != cluster_certificates_collection_version
+
+    - name: Replace the renewal service without overlapping the existing issuer
+      block:
+        - name: Pause the renewal timer during its configuration update
+          ansible.builtin.systemd_service:
+            name: cluster-certificates.timer
+            state: stopped
+
+        - name: Wait for an already-running renewal to complete
+          ansible.builtin.command:
+            argv: [systemctl, is-active, cluster-certificates.service]
+          register: certificate_service_state
+          changed_when: false
+          failed_when: certificate_service_state.stdout not in ['active', 'activating', 'inactive', 'failed', 'unknown']
+          until: certificate_service_state.stdout in ['inactive', 'failed', 'unknown']
+          retries: 60
+          delay: 2
+
+        - name: Record which renewal configuration files already exist
+          ansible.builtin.stat:
+            path: "{{ item }}"
+            follow: false
+          loop:
+            - "{{ cluster_certificates_directory }}/certificate-renewal.yml"
+            - "{{ cluster_certificates_directory }}/tasks/renew-certificate.yml"
+            - "{{ cluster_certificates_directory }}/tasks/verify-certificate.yml"
+            - "{{ cluster_certificates_directory }}/inventory.yml"
+          register: certificate_configuration_before
+
+        - name: Create the root-owned renewal configuration directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+          loop:
+            - "{{ cluster_certificates_directory }}"
+            - "{{ cluster_certificates_directory }}/tasks"
+
+        - name: Install the declarative local renewal playbook
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/certificate-renewal.yml"
+            dest: "{{ cluster_certificates_directory }}/certificate-renewal.yml"
+            owner: root
+            group: root
+            mode: "0600"
+            backup: true
+          register: certificate_playbook_install
+
+        - name: Install the certificate tasks
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/tasks/{{ item }}"
+            dest: "{{ cluster_certificates_directory }}/tasks/{{ item }}"
+            owner: root
+            group: root
+            mode: "0600"
+            backup: true
+          loop:
+            - renew-certificate.yml
+            - verify-certificate.yml
+          register: certificate_tasks_install
+
+        - name: Install the local host certificate settings
+          ansible.builtin.template:
+            src: cluster-certificates-inventory.yml.j2
+            dest: "{{ cluster_certificates_directory }}/inventory.yml"
+            owner: root
+            group: root
+            mode: "0600"
+            backup: true
+          register: certificate_inventory_install
+
+        - name: Validate the installed playbook with its pinned runtime
+          ansible.builtin.command:
+            argv:
+              - "/usr/bin/ansible-playbook"
+              - --syntax-check
+              - --inventory
+              - "{{ cluster_certificates_directory }}/inventory.yml"
+              - "{{ cluster_certificates_directory }}/certificate-renewal.yml"
+          environment:
+            ANSIBLE_COLLECTIONS_PATH: "{{ cluster_certificates_collection_directory }}"
+          changed_when: false
+
+        - name: Install the renewal service using the local playbook
+          ansible.builtin.template:
+            src: cluster-certificates.service.j2
+            dest: /etc/systemd/system/cluster-certificates.service
+            owner: root
+            group: root
+            mode: "0644"
+            backup: true
+          register: certificate_service_install
+
+        - name: Install the daily renewal timer
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/cluster-certificates.timer"
+            dest: /etc/systemd/system/cluster-certificates.timer
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Run and verify the replacement renewal service
+          ansible.builtin.systemd_service:
+            name: cluster-certificates.service
+            daemon_reload: true
+            state: started
+      rescue:
+        - name: Restore the preceding renewal configuration files
+          ansible.builtin.copy:
+            src: "{{ item.backup_file }}"
+            remote_src: true
+            dest: "{{ item.dest }}"
+            owner: root
+            group: root
+            mode: "0600"
+          loop: >-
+            {{ [certificate_playbook_install | default({}), certificate_inventory_install | default({})]
+               + (certificate_tasks_install.results | default([])) }}
+          loop_control:
+            label: "{{ item.dest | default('unchanged configuration') }}"
+          when: item.backup_file is defined
+
+        - name: Remove renewal configuration files created by the failed installation
+          ansible.builtin.file:
+            path: "{{ item.item }}"
+            state: absent
+          loop: "{{ certificate_configuration_before.results | default([]) }}"
+          loop_control:
+            label: "{{ item.item }}"
+          when: not (item.stat.exists | default(true))
+
+        - name: Restore the preceding renewal service after a failed replacement
+          ansible.builtin.copy:
+            src: "{{ certificate_service_install.backup_file }}"
+            remote_src: true
+            dest: /etc/systemd/system/cluster-certificates.service
+            owner: root
+            group: root
+            mode: "0644"
+          when: certificate_service_install.backup_file is defined
+
+        - name: Restore scheduled renewal after the failed installation
+          ansible.builtin.systemd_service:
+            name: cluster-certificates.timer
+            daemon_reload: true
+            enabled: true
+            state: started
+
+        - name: Report the failed certificate runtime installation
+          ansible.builtin.fail:
+            msg: The local certificate renewal replacement failed; the previous service was restored where available and scheduled renewal was resumed.
+
+    - name: Keep daily certificate renewal enabled
+      ansible.builtin.systemd_service:
+        name: cluster-certificates.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Remove retired certificate and qualification executables
+      ansible.builtin.file:
+        path: "/usr/local/sbin/{{ item }}"
+        state: absent
+      loop:
+        - cluster-certificates
+        - cluster-api-candidate
+        - cluster-workload-auth
+        - cluster-workload-check
+        - cluster-continuity

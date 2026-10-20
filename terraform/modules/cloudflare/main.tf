@@ -32,9 +32,25 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "this_tunnel_cfg" {
     ingress = concat([
       for r in var.ingress_rules : {
         hostname = "${r.hostname}.${var.domain_name}"
+        path     = "^/v1/agent/connect/ca/leaf(/|$)"
+        service  = "http_status:403"
+      } if r.hostname == "consul"
+      ], [
+      for r in var.ingress_rules : {
+        hostname = "${r.hostname}.${var.domain_name}"
+        path     = ""
         service  = r.service
+        origin_request = r.origin_request == null ? null : merge(r.origin_request,
+          contains(local.admin_services, r.hostname) ? {
+            access = {
+              required  = true
+              team_name = var.access_team_name
+              aud_tag   = [cloudflare_zero_trust_access_application.admin[r.hostname].aud]
+            }
+          } : {}
+        )
       }
-    ], [{ service = var.traefik_address }])
+    ], [{ service = var.traefik_address, path = "" }])
   }
 }
 

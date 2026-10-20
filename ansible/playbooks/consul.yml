@@ -58,6 +58,10 @@
     consul_tls_ca_crt: "{{ consul_tls_dir }}/ca-consul.pem"
     consul_tls_server_crt: "{{ consul_tls_dir }}/cert-consul.pem"
     consul_tls_server_key: "{{ consul_tls_dir }}/cert-consul-key.pem"
+    consul_tls_verify_incoming_rpc: true
+    consul_tls_verify_server_hostname: true
+    consul_tls_verify_outgoing: true
+    consul_tls_verify_incoming_https: false
 
 - name: update resolv.conf
   hosts: servers

@@ -20,7 +20,7 @@ output "placeholder_secrets" {
 }
 
 output "derived_secrets" {
-  description = "Secrets initialized as Infisical reference values."
+  description = "Seed secrets initialized as Infisical references; administrative endpoints are managed separately."
   value = {
     for path, secrets in local.secret_shape :
     path => {
@@ -34,4 +34,9 @@ output "derived_secrets" {
       if secret.kind == "derived-reference"
     ]) > 0
   }
+}
+
+output "administrative_endpoints" {
+  description = "Public administrative HTTPS endpoint values managed in the Terraform folder."
+  value       = local.administrative_endpoints
 }

@@ -1,0 +1,25 @@
+#!/usr/sbin/nft -f
+
+# Replace only this table. Docker and Nomad manage their own tables.
+destroy table inet cluster_admin
+
+table inet cluster_admin {
+    chain input {
+        type filter hook input priority -10; policy accept;
+
+        iifname "lo" accept
+
+        # Allocations need discovery and native APIs. Keep legacy Consul HTTP
+        # private until its remaining consumers migrate to HTTPS.
+        iifname "nomad" tcp dport { 53, 4646, 8200, 8500, 8501, 8503, 8600 } accept
+        iifname "nomad" udp dport { 53, 8600 } accept
+
+        # VPN clients need DNS and the verified native APIs, not cluster RPC.
+        iifname { "docker0", "amn0" } tcp dport { 53, 4646, 8200, 8501, 8503, 8600 } accept
+        iifname { "docker0", "amn0" } udp dport { 53, 8600 } accept
+
+        # Native administrative APIs, cluster RPC, gossip, and internal DNS.
+        tcp dport { 53, 4646, 4647, 4648, 8200, 8201, 8300, 8301, 8302, 8500, 8501, 8502, 8503, 8600 } counter drop
+        udp dport { 53, 4648, 8301, 8302, 8600 } counter drop
+    }
+}

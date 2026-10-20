@@ -4,4 +4,14 @@
 **/terraform.tfstate.backup
 **/.terraform/
 **/.terragrunt-cache/
-
+/.audit/
+/backups/
+/.playwright-mcp/
+/scripts/
+/qualification/
+/pki/
+__pycache__/
+*.tftest.hcl
+*.tftest.json
+*.tfmock.hcl
+*.tfmock.json

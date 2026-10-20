@@ -1,0 +1,21 @@
+#!/usr/sbin/nft -f
+
+# Run before Docker/Nomad destination NAT, covering IPv4 and IPv6.
+# Direct Nomad/Vault UI ports retain the deferred browser verification gate.
+destroy table inet cluster_mesh_guard
+table inet cluster_mesh_guard {
+    counter udp_dns { }
+    counter udp_nomad_serf { }
+    counter udp_consul_lan { }
+    counter udp_consul_wan { }
+    counter udp_consul_dns { }
+    chain prerouting {
+        type filter hook prerouting priority -110; policy accept;
+        iifname "eth0" ct direction original tcp dport { 53, 4647, 4648, 8201, 8300, 8301, 8302, 8500, 8501, 8502, 8503, 8600, 20000-32000 } counter drop
+        iifname "eth0" ct direction original udp dport 53 counter name udp_dns drop
+        iifname "eth0" ct direction original udp dport 4648 counter name udp_nomad_serf drop
+        iifname "eth0" ct direction original udp dport 8301 counter name udp_consul_lan drop
+        iifname "eth0" ct direction original udp dport 8302 counter name udp_consul_wan drop
+        iifname "eth0" ct direction original udp dport 8600 counter name udp_consul_dns drop
+    }
+}

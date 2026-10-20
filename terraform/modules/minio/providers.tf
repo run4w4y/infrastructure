@@ -19,6 +19,15 @@ variable "vault_address" {
 
 provider "vault" {
   address = var.vault_address
+
+  dynamic "headers" {
+    for_each = var.cloudflare_access_headers
+
+    content {
+      name  = headers.key
+      value = headers.value
+    }
+  }
 }
 
 variable "minio_address" {

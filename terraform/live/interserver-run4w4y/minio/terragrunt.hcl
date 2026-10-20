@@ -3,6 +3,11 @@ terraform {
 }
 
 inputs = {
+  cloudflare_access_headers = get_env("CF_ACCESS_CLIENT_ID", "") == "" ? {} : {
+    "CF-Access-Client-Id"     = get_env("CF_ACCESS_CLIENT_ID")
+    "CF-Access-Client-Secret" = get_env("CF_ACCESS_CLIENT_SECRET")
+  }
+
   vault_address = get_env("VAULT_ADDR")
   minio_address = "s3.${get_env("DOMAIN_NAME")}"
 }

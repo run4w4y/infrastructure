@@ -1,0 +1,279 @@
+---
+- name: Require a running service before renewing its certificate
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ certificate_service.name }}"]
+  changed_when: false
+
+- name: Read the service account
+  ansible.builtin.command:
+    argv: [systemctl, show, "{{ certificate_service.name }}", --property=User, --value]
+  register: certificate_user
+  changed_when: false
+
+- name: Read the service group
+  ansible.builtin.command:
+    argv: [systemctl, show, "{{ certificate_service.name }}", --property=Group, --value]
+  register: certificate_group
+  changed_when: false
+
+- name: Look up the service account's primary group
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ certificate_user.stdout | default('root', true) }}"
+
+- name: Set the certificate's service ownership
+  ansible.builtin.set_fact:
+    certificate_owner: "{{ certificate_user.stdout | default('root', true) }}"
+    certificate_gid: "{{ certificate_group.stdout | default(ansible_facts.getent_passwd[certificate_user.stdout | default('root', true)][2], true) }}"
+
+- name: Keep service certificate generations private
+  ansible.builtin.file:
+    path: "/etc/cluster-pki/{{ certificate_service.name }}"
+    state: directory
+    owner: root
+    group: "{{ certificate_gid }}"
+    mode: "0750"
+
+- name: Inspect the active certificate generation
+  ansible.builtin.stat:
+    path: "/etc/cluster-pki/{{ certificate_service.name }}/current"
+    follow: false
+  register: certificate_current_link
+
+- name: Require the existing managed generation link
+  ansible.builtin.assert:
+    that:
+      - certificate_current_link.stat.exists
+      - certificate_current_link.stat.islnk
+    fail_msg: The existing service certificate generation is missing or is not a symbolic link; restore the existing certificate before running renewal.
+
+- name: Read the active certificate and explicit renewal threshold
+  community.crypto.x509_certificate_info:
+    path: "/etc/cluster-pki/{{ certificate_service.name }}/current/cert.pem"
+    valid_at:
+      renewal_threshold: "+21d"
+  register: certificate_current
+
+- name: Read the active key's public identity
+  community.crypto.openssl_privatekey_info:
+    path: "/etc/cluster-pki/{{ certificate_service.name }}/current/key.pem"
+  register: certificate_current_key
+  no_log: true
+
+- name: Require the current certificate and key to match
+  ansible.builtin.assert:
+    that:
+      - certificate_current.public_key_fingerprints.sha256 == certificate_current_key.public_key_fingerprints.sha256
+    fail_msg: The existing certificate and key do not match; restore the previous generation before renewal.
+
+- name: Require explicit Vault registration before any certificate reload
+  ansible.builtin.slurp:
+    src: /etc/vault.d/vault_main.hcl
+  register: certificate_vault_configuration
+  when: certificate_service.name == 'vault'
+  no_log: true
+
+- name: Check the explicit Vault registration settings
+  ansible.builtin.assert:
+    that:
+      - registration | length == 1
+      - registration | first | regex_search('disable_registration\s*=\s*"?true') is none
+    fail_msg: Vault needs one enabled explicit Consul service_registration stanza before certificate reload.
+  vars:
+    registration: >-
+      {{ certificate_vault_configuration.content | b64decode | regex_findall('(?ms)^\s*service_registration\s+"consul"\s*\{(.*?)^\s*\}') }}
+  when: certificate_service.name == 'vault'
+  no_log: true
+
+- name: Create and activate a new generation when renewal is due
+  when: cluster_certificates_renew_now | bool or not certificate_current.valid_at.renewal_threshold
+  block:
+    - name: Create the next generation directory
+      ansible.builtin.tempfile:
+        state: directory
+        path: "/etc/cluster-pki/{{ certificate_service.name }}"
+        prefix: issued-
+      register: certificate_next
+
+    - name: Set the next generation's directory permissions
+      ansible.builtin.file:
+        path: "{{ certificate_next.path }}"
+        owner: root
+        group: "{{ certificate_gid }}"
+        mode: "0750"
+
+    - name: Generate a dedicated service key
+      community.crypto.openssl_privatekey:
+        path: "{{ certificate_next.path }}/key.pem"
+        type: ECC
+        curve: secp256r1
+        owner: "{{ certificate_owner }}"
+        group: "{{ certificate_gid }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Define the certificate's exact service names and usages
+      community.crypto.openssl_csr:
+        path: "{{ certificate_next.path }}/request.pem"
+        privatekey_path: "{{ certificate_next.path }}/key.pem"
+        common_name: "{{ certificate_service.names | first }}"
+        subject_alt_name: "{{ (certificate_service.names | map('regex_replace', '^', 'DNS:') | list) + (cluster_certificate_addresses | map('regex_replace', '^', 'IP:') | list) }}"
+        basic_constraints: ["CA:FALSE"]
+        basic_constraints_critical: true
+        key_usage: [digitalSignature, keyEncipherment]
+        key_usage_critical: true
+        extended_key_usage: [serverAuth, clientAuth]
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Sign the next 90-day certificate with the existing CA
+      community.crypto.x509_certificate:
+        path: "{{ certificate_next.path }}/cert.pem"
+        csr_path: "{{ certificate_next.path }}/request.pem"
+        provider: ownca
+        ownca_path: "{{ cluster_certificate_ca }}"
+        ownca_privatekey_path: "{{ cluster_certificate_ca_key }}"
+        ownca_not_before: "-5m"
+        ownca_not_after: "+90d"
+        owner: "{{ certificate_owner }}"
+        group: "{{ certificate_gid }}"
+        mode: "0644"
+      no_log: true
+
+    - name: Verify every DNS name against the existing CA before activation
+      ansible.builtin.command:
+        argv: [openssl, verify, -CAfile, "{{ cluster_certificate_ca }}", -verify_hostname, "{{ item }}", "{{ certificate_next.path }}/cert.pem"]
+      loop: "{{ certificate_service.names }}"
+      changed_when: false
+
+    - name: Verify every IP address before activation
+      ansible.builtin.command:
+        argv: [openssl, verify, -CAfile, "{{ cluster_certificate_ca }}", -verify_ip, "{{ item }}", "{{ certificate_next.path }}/cert.pem"]
+      loop: "{{ cluster_certificate_addresses }}"
+      changed_when: false
+
+    - name: Read the completed certificate's public identity
+      community.crypto.x509_certificate_info:
+        path: "{{ certificate_next.path }}/cert.pem"
+      register: certificate_next_identity
+
+    - name: Read the completed key's public identity
+      community.crypto.openssl_privatekey_info:
+        path: "{{ certificate_next.path }}/key.pem"
+      register: certificate_next_key
+      no_log: true
+
+    - name: Verify the completed certificate and key match
+      ansible.builtin.assert:
+        that:
+          - certificate_next_identity.public_key_fingerprints.sha256 == certificate_next_key.public_key_fingerprints.sha256
+
+    - name: Remove the completed signing request
+      ansible.builtin.file:
+        path: "{{ certificate_next.path }}/request.pem"
+        state: absent
+
+    - name: Atomically activate and verify the complete certificate generation
+      block:
+        - name: Switch the current generation after successful validation
+          ansible.builtin.file:
+            src: "{{ certificate_next.path }}"
+            dest: "/etc/cluster-pki/{{ certificate_service.name }}/current"
+            state: link
+            force: true
+            follow: false
+
+        - name: Reload the service without restarting its process
+          ansible.builtin.systemd_service:
+            name: "{{ certificate_service.name }}"
+            state: reloaded
+
+        - name: Verify the newly served certificate and discovery
+          ansible.builtin.include_tasks: verify-certificate.yml
+          vars:
+            certificate_expected_path: "{{ certificate_next.path }}/cert.pem"
+      rescue:
+        - name: Restore the preceding generation after a failed activation
+          ansible.builtin.file:
+            src: "{{ certificate_current_link.stat.lnk_source }}"
+            dest: "/etc/cluster-pki/{{ certificate_service.name }}/current"
+            state: link
+            force: true
+            follow: false
+
+        - name: Reload the service using the restored generation
+          ansible.builtin.systemd_service:
+            name: "{{ certificate_service.name }}"
+            state: reloaded
+
+        - name: Verify recovery with the preceding certificate
+          ansible.builtin.include_tasks: verify-certificate.yml
+          vars:
+            certificate_expected_path: "{{ certificate_current_link.stat.lnk_source }}/cert.pem"
+
+        - name: Report certificate activation failure after recovery
+          ansible.builtin.fail:
+            msg: The new certificate failed activation; the preceding certificate was restored and verified.
+  rescue:
+    - name: Inspect which generation is still active after failure
+      ansible.builtin.stat:
+        path: "/etc/cluster-pki/{{ certificate_service.name }}/current"
+        follow: false
+      register: certificate_after_failure
+
+    - name: Remove an unactivated failed generation
+      ansible.builtin.file:
+        path: "{{ certificate_next.path }}"
+        state: absent
+      when:
+        - certificate_next.path is defined
+        - certificate_after_failure.stat.lnk_source | default('') != certificate_next.path
+
+    - name: Report the failed renewal
+      ansible.builtin.fail:
+        msg: "Certificate renewal failed at '{{ ansible_failed_task.name }}'; the active generation and recovery outcome are recorded above."
+
+- name: Read the currently served certificate before the normal health check
+  community.crypto.get_certificate:
+    host: 127.0.0.1
+    port: "{{ certificate_service.port }}"
+    server_name: "{{ certificate_service.names | first }}"
+    ca_cert: "{{ cluster_certificate_ca }}"
+    timeout: 3
+  register: certificate_before_check
+  failed_when: false
+  when: not cluster_certificates_renew_now | bool and certificate_current.valid_at.renewal_threshold
+
+- name: Finish a reload interrupted after an earlier generation switch
+  ansible.builtin.systemd_service:
+    name: "{{ certificate_service.name }}"
+    state: reloaded
+  when:
+    - not cluster_certificates_renew_now | bool and certificate_current.valid_at.renewal_threshold
+    - certificate_before_check.serial_number | default(-1) != certificate_current.serial_number
+
+- name: Verify the current generation and service health
+  ansible.builtin.include_tasks: verify-certificate.yml
+  vars:
+    certificate_expected_path: "/etc/cluster-pki/{{ certificate_service.name }}/current/cert.pem"
+
+- name: Find superseded certificate generations after a successful renewal
+  ansible.builtin.find:
+    paths: "/etc/cluster-pki/{{ certificate_service.name }}"
+    file_type: directory
+    patterns: issued-*
+    recurse: false
+  register: certificate_generations
+  when: cluster_certificates_renew_now | bool or not certificate_current.valid_at.renewal_threshold
+
+- name: Retain the current and preceding generation for recovery
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ certificate_generations.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when:
+    - cluster_certificates_renew_now | bool or not certificate_current.valid_at.renewal_threshold
+    - item.path not in [certificate_next.path, certificate_current_link.stat.lnk_source]

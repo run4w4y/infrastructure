@@ -46,6 +46,9 @@ jobs:
   deploy-ente:
     needs: build-ente
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout source
@@ -59,32 +62,85 @@ jobs:
           unzip -q np.zip -d ./np
           mv ./np/nomad-pack /usr/local/bin/nomad-pack
 
-      - name: Open private Nomad connection
-        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+      - name: Fetch Nomad deployment credentials
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-id: ${{ vars.INFISICAL_PROJECT_ID }}
+          env-slug: ${{ vars.INFISICAL_ENV }}
+          domain: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+          oidc-audience: https://github.com/run4w4y
+          secret-path: /
+          recursive: false
+          include-imports: false
 
       - name: Deploy Nomad Pack
         env:
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
-
           docker_image_tag: ${{ needs.build-ente.outputs.docker_image_tag }}
           docker_image_username: ${{ github.actor }}
           docker_image_password: ${{ secrets.REGISTRY_PULL_TOKEN }}
           docker_image_name: ${{ env.ENTE_WEB_IMAGE_NAME }}
         run: |
-          nomad-pack run packs/ente-web --parser-v1 -f ./pack_vars/interserver-run4w4y/ente-web.hcl \
+          set -euo pipefail
+          umask 077
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
+          nomad_tmp=$(mktemp -d "${RUNNER_TEMP}/nomad-submit.XXXXXX")
+          trap 'rm -rf "$nomad_tmp"' EXIT
+          nomad-pack render packs/ente-web --parser-v1 -f ./pack_vars/interserver-run4w4y/ente-web.hcl --to-dir "$nomad_tmp/render" --skip-aux-files \
             --var "docker_image_tag=${docker_image_tag}" \
             --var "docker_image_username=${docker_image_username}" \
             --var "docker_image_password=${docker_image_password}" \
-            --var "docker_image_name=${docker_image_name}"
-
-      - name: Close private Nomad connection
-        if: always()
-        run: |
-          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
-            python3 "$CLUSTER_NOMAD_ACTION/close.py"
-            test ! -e "$CLUSTER_NOMAD_CONTROL"
-            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
-            echo "Private Nomad connection cleanup verified"
-          fi
+            --var "docker_image_name=${docker_image_name}" > /dev/null
+          render_root="$nomad_tmp/render"
+          http=(--silent --show-error --connect-timeout 10 --max-time 60
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+            --header "X-Nomad-Token: ${NOMAD_TOKEN}"
+            --header 'Content-Type: application/json')
+          shopt -s nullglob globstar
+          all_jobs=("$render_root"/**/*.nomad)
+          [[ ${#all_jobs[@]} -eq 1 ]]
+          while read -r pack job_id allow_missing_owner; do
+            files=("$render_root/$pack"/**/*.nomad)
+            [[ ${#files[@]} -eq 1 ]]
+            jq -n --rawfile hcl "${files[0]}" '{JobHCL: $hcl, Canonicalize: true}' > "$nomad_tmp/parse.json"
+            status=$(curl "${http[@]}" --fail --output "$nomad_tmp/job.json" --write-out '%{http_code}' \
+              --data-binary "@$nomad_tmp/parse.json" https://nomad.4w4y.run/v1/jobs/parse)
+            [[ "$status" == 200 ]]
+            jq -e --arg id "$job_id" '.ID == $id and .Name == $id and .Namespace == "default" and .Type == "service"' \
+              "$nomad_tmp/job.json" > /dev/null
+            status=$(curl "${http[@]}" --output "$nomad_tmp/current.json" --write-out '%{http_code}' \
+              "https://nomad.4w4y.run/v1/job/${job_id}?namespace=default")
+            case "$status" in
+              200)
+                jq -e --arg id "$job_id" --arg pack "$pack" --argjson adopt "$allow_missing_owner" '
+                  (.Meta // {}) as $meta |
+                  .ID == $id and .Namespace == "default" and (.JobModifyIndex | type == "number" and . > 0 and floor == .) and
+                  (($meta | has("pack.deployment_name")) or $adopt) and
+                  ({"pack.deployment_name": $pack, "pack.name": $pack,
+                    "pack.job": $id, "pack.registry": "<<local folder>>"} | to_entries |
+                    all(. as $entry | ($meta | has($entry.key) | not) or $meta[$entry.key] == $entry.value))
+                ' "$nomad_tmp/current.json" > /dev/null
+                ;;
+              404) printf 'null\n' > "$nomad_tmp/current.json" ;;
+              *) printf 'Nomad job lookup failed (HTTP %s).\n' "$status" >&2; exit 1 ;;
+            esac
+            jq --slurpfile current "$nomad_tmp/current.json" --rawfile hcl "${files[0]}" \
+              --arg pack "$pack" --arg source "$GITHUB_WORKSPACE/packs/$pack" '
+                if $current[0] == null then
+                  .Meta = ((.Meta // {}) + {"pack.path": $source, "pack.name": $pack,
+                    "pack.registry": "<<local folder>>", "pack.deployment_name": $pack,
+                    "pack.job": .Name, "pack.version": "<<none>>"})
+                else .Meta = ((.Meta // {}) + ($current[0].Meta // {})) end |
+                {Job: ., EnforceIndex: true, JobModifyIndex: ($current[0].JobModifyIndex // 0),
+                  Submission: {Source: $hcl, Format: "hcl2"}}
+              ' "$nomad_tmp/job.json" > "$nomad_tmp/register.json"
+            status=$(curl "${http[@]}" --fail --output "$nomad_tmp/registered.json" --write-out '%{http_code}' \
+              --data-binary "@$nomad_tmp/register.json" https://nomad.4w4y.run/v1/jobs)
+            [[ "$status" == 200 ]]
+            jq -e 'select((.EvalID | type) == "string" and (.EvalID | length) > 0 and
+              (.JobModifyIndex | type == "number" and . > 0)) | {EvalID, JobModifyIndex}' "$nomad_tmp/registered.json"
+          done <<'JOBS'
+          ente-web ente-web true
+          JOBS

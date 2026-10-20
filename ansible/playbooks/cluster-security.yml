@@ -1,0 +1,124 @@
+---
+- name: Manage the existing cluster mesh firewall
+  hosts: servers
+  become: true
+  gather_facts: false
+  vars:
+    admin_firewall_enabled: true
+  tasks:
+    - name: Install the validated mesh firewall rules
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/cluster-mesh-guard.nft"
+        dest: /etc/cluster-mesh-guard.nft
+        owner: root
+        group: root
+        mode: "0644"
+        validate: /usr/sbin/nft --check --file %s
+      notify: Reload the mesh firewall
+
+    - name: Install the persistent mesh firewall unit
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/cluster-mesh-guard.service"
+        dest: /etc/systemd/system/cluster-mesh-guard.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload the mesh firewall
+
+    - name: Keep the existing mesh firewall enabled
+      ansible.builtin.systemd_service:
+        name: cluster-mesh-guard.service
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Manage the administrative firewall after its rollout gate
+      when: admin_firewall_enabled | bool
+      block:
+        - name: Install the validated administrative firewall rules
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/cluster-admin.nft"
+            dest: /etc/cluster-admin.nft
+            owner: root
+            group: root
+            mode: "0644"
+            validate: /usr/sbin/nft --check --file %s
+          notify: Reload the administrative firewall
+
+        - name: Install the persistent administrative firewall unit
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/cluster-admin-firewall.service"
+            dest: /etc/systemd/system/cluster-admin-firewall.service
+            owner: root
+            group: root
+            mode: "0644"
+          notify: Reload the administrative firewall
+
+        - name: Keep the approved administrative firewall enabled
+          ansible.builtin.systemd_service:
+            name: cluster-admin-firewall.service
+            daemon_reload: true
+            enabled: true
+            state: started
+    - name: Inspect the retired forwarding-only CI account
+      ansible.builtin.getent:
+        database: passwd
+        key: nomad-ci
+        fail_key: false
+      register: legacy_ci_account
+
+    - name: Require the legacy account to own only its dedicated home
+      ansible.builtin.assert:
+        that:
+          - not legacy_ci_account.ansible_facts.getent_passwd['nomad-ci'] or legacy_ci_account.ansible_facts.getent_passwd['nomad-ci'][4] == '/var/lib/nomad-ci'
+        fail_msg: The retired CI account has an unexpected home; inspect it before removing the account.
+
+    - name: Remove all legacy CI authorized keys
+      ansible.builtin.file:
+        path: /var/lib/nomad-ci/.ssh
+        state: absent
+
+    - name: Close any surviving legacy CI forwarding sessions
+      ansible.builtin.command:
+        argv: [pkill, --signal, TERM, --uid, nomad-ci]
+      register: legacy_ci_sessions
+      failed_when: legacy_ci_sessions.rc not in [0, 1]
+      changed_when: legacy_ci_sessions.rc == 0
+      when: legacy_ci_account.ansible_facts.getent_passwd['nomad-ci'] is not none
+
+    - name: Remove the retired CI account and its dedicated home
+      ansible.builtin.user:
+        name: nomad-ci
+        state: absent
+        remove: true
+
+    - name: Remove the retired CI account's dedicated group
+      ansible.builtin.group:
+        name: nomad-ci
+        state: absent
+
+    - name: Remove the obsolete forwarding-only SSH match block
+      ansible.builtin.replace:
+        path: /etc/ssh/sshd_config
+        regexp: '(?ms)^Match[ \t]+User[ \t]+nomad-ci[ \t]*\r?\n.*?(?=^[ \t]*Match[ \t]|\Z)'
+        replace: ''
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Reload SSH after removing the retired CI account
+  handlers:
+    - name: Reload the mesh firewall
+      ansible.builtin.systemd_service:
+        name: cluster-mesh-guard.service
+        daemon_reload: true
+        state: reloaded
+
+    - name: Reload the administrative firewall
+      when: admin_firewall_enabled | bool
+      ansible.builtin.systemd_service:
+        name: cluster-admin-firewall.service
+        daemon_reload: true
+        state: reloaded
+
+    - name: Reload SSH after removing the retired CI account
+      ansible.builtin.systemd_service:
+        name: ssh.service
+        state: reloaded

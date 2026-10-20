@@ -3,10 +3,15 @@ terraform {
 }
 
 inputs = {
+  cloudflare_access_headers = get_env("CF_ACCESS_CLIENT_ID", "") == "" ? {} : {
+    "CF-Access-Client-Id"     = get_env("CF_ACCESS_CLIENT_ID")
+    "CF-Access-Client-Secret" = get_env("CF_ACCESS_CLIENT_SECRET")
+  }
+
   vault_address = get_env("VAULT_ADDR")
 
   consul_vault_token = get_env("CONSUL_HTTP_TOKEN")
-  consul_address     = get_env("CONSUL_HTTP_ADDR")
+  cluster_ca_pem     = base64decode(get_env("CLUSTER_CA_BASE64"))
 }
 
 generate "backend" {

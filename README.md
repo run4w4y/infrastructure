@@ -18,6 +18,27 @@ injected from Infisical by the live directory's `direnv` setup. In particular,
 keep `interserver-run4w4y-nomad` in local execution mode; remote execution does
 not receive the Nomad, Consul, or Vault tokens.
 
+## Administrative access and CI
+
+Terraform providers use the public Nomad, Consul, and Vault HTTPS addresses.
+Infisical supplies `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`, and the native
+service ACL tokens from `/terraform`. Public TLS uses the system trust store.
+`CLUSTER_CA_BASE64` supplies the CA for internal workload-identity discovery.
+
+Access applications, policies, and service credentials belong to the existing
+Cloudflare module. OpenViking and Paseo jobs and persistent volumes belong to
+Nomad; their service intentions belong to Consul.
+
+CI uses GitHub OIDC to read a dedicated Infisical project for each repository,
+then submits jobs through the public Nomad API with Access headers. Repository
+credentials contain only its Access pair and native Nomad token.
+
+See [cluster administration](docs/cluster-access.md) for operator access, the
+Ansible certificate-renewal timer, firewall configuration, and recovery. Runtime
+keys, backups, temporary probes, and qualification output stay outside Git.
+The existing Nomad module also owns [OpenViking](docs/openviking.md) and
+[Paseo](docs/paseo.md).
+
 # Step by step deployment
 1. Run the Consul deployment playbook.
 2. Run the Consul Terraform

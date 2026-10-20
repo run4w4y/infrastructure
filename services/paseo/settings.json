@@ -1,0 +1,6 @@
+{
+  "memory_reservation_mib": 384,
+  "memory_limit_mib": 2304,
+  "sidecar_memory_mib": 128,
+  "node_options": "--max-old-space-size=384 --max-semi-space-size=8"
+}

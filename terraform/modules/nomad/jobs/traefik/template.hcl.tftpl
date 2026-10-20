@@ -51,6 +51,9 @@ EOH
 
       config {
         image = "library/traefik:3.4.0"
+        volumes = [
+          "/usr/local/share/ca-certificates/cluster-control.crt:/local/cluster-ca.pem:ro",
+        ]
 
         command = "traefik"
         args = [
@@ -63,7 +66,8 @@ EOH
           "--providers.consulCatalog.connectAware=true",
           "--providers.consulcatalog.endpoint.address=consul.service.consul:8501",
           "--providers.consulCatalog.endpoint.scheme=https",
-          "--providers.consulCatalog.endpoint.tls.insecureSkipVerify=true",
+          "--providers.consulCatalog.endpoint.tls.ca=/local/cluster-ca.pem",
+          "--providers.consulCatalog.endpoint.tls.insecureSkipVerify=false",
           "--providers.consulcatalog.defaultrule=Host(`{{ if index .Labels \"traefik.subdomain\" }}{{ index .Labels \"traefik.subdomain\" }}{{ else }}{{ .Name }}{{ end }}.${primary_domain}`)",
           "--providers.consulcatalog.exposedbydefault=false",
 

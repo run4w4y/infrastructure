@@ -3,7 +3,8 @@ resource "consul_acl_auth_method" "nomad" {
   type = "jwt"
 
   config_json = jsonencode({
-    JWKSURL          = "http://nomad-servers.service.consul:4646/.well-known/jwks.json"
+    JWKSURL          = "https://nomad-servers.service.consul:4646/.well-known/jwks.json"
+    JWKSCACert       = var.cluster_ca_pem
     JWTSupportedAlgs = ["RS256"]
     BoundAudiences   = ["consul.io"]
     ClaimMappings = {

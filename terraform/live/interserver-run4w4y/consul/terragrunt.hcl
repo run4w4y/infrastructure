@@ -3,6 +3,11 @@ terraform {
 }
 
 inputs = {
+  cloudflare_access_headers = get_env("CF_ACCESS_CLIENT_ID", "") == "" ? {} : {
+    "CF-Access-Client-Id"     = get_env("CF_ACCESS_CLIENT_ID")
+    "CF-Access-Client-Secret" = get_env("CF_ACCESS_CLIENT_SECRET")
+  }
+
   consul_address = get_env("CONSUL_HTTP_ADDR")
 
   infisical_sync_enabled = get_env("INFISICAL_PROJECT_ID", "") != ""

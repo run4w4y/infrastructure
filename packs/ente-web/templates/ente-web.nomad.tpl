@@ -12,7 +12,7 @@ job [[ .my.job_name | quote ]] {
         to = 3005
       }
 
-      [[ range keys .my.ports ]]
+      [[ range list "photos" "accounts" "auth" "cast" "albums" ]]
       port [[ . | quote ]] {
         to = [[ index $.my.ports . ]]
       }
@@ -30,7 +30,7 @@ job [[ .my.job_name | quote ]] {
       tags = [
         "traefik.enable=true",
         "traefik.consulcatalog.connect=true",
-        [[ range keys .my.subdomains ]]
+        [[ range list "albums" "photos" "accounts" "auth" "cast" ]]
         "traefik.http.routers.ente-web-[[ . ]].rule=Host(`[[ index $subdomains . ]].[[ $.my.primary_domain ]]`)",
         "traefik.http.routers.ente-web-[[ . ]].entrypoints=web",
         "traefik.http.routers.ente-web-[[ . ]].service=ente-web",
@@ -115,7 +115,7 @@ http {
     location = /healthz { return 200 "ok\n"; }
     location / { return 421; }
   }
-  [[ range keys .my.subdomains ]]
+  [[ range list "albums" "photos" "accounts" "auth" "cast" ]]
   upstream [[ . ]] {
     server 127.0.0.1:[[ index $ports . ]];
     keepalive 2;
@@ -136,7 +136,7 @@ EOH
       }
     }
 
-    [[ range keys .my.subdomains ]]
+    [[ range list "photos" "accounts" "auth" "cast" "albums" ]]
     task "ente-web-[[ . ]]" {
       driver = "docker"
 

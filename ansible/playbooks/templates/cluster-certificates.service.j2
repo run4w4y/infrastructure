@@ -1,0 +1,13 @@
+[Unit]
+Description=Renew Nomad and Vault certificates using local Ansible
+After=consul.service nomad.service vault.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=10min
+Environment=ANSIBLE_COLLECTIONS_PATH={{ cluster_certificates_collection_directory }}
+Environment=ANSIBLE_NOCOLOR=1
+ExecStart=/usr/bin/flock --wait 60 /run/lock/cluster-certificates.lock /usr/bin/ansible-playbook --inventory {{ cluster_certificates_directory }}/inventory.yml {{ cluster_certificates_directory }}/certificate-renewal.yml
+User=root
+Group=root
+UMask=0077

@@ -2,10 +2,10 @@
 # Manual edits may be lost in future updates.
 
 provider "registry.terraform.io/cloudflare/cloudflare" {
-  version     = "5.4.0"
-  constraints = "~> 5.4"
+  version     = "5.28.0"
+  constraints = "5.28.0"
   hashes = [
-    "h1:Rs5gaiRip5QqC3cV6BhTtvfAvOILxTmY40Ktty3DeYY=",
+    "h1:CdHJMkBNOZa+dyrho1BuYdjgCNaoqaBbSSOqlArqkD0=",
   ]
 }
 
@@ -17,10 +17,18 @@ provider "registry.terraform.io/hashicorp/vault" {
   ]
 }
 
-provider "registry.terraform.io/marcfrederick/porkbun" {
-  version     = "1.2.0"
-  constraints = "~> 1.1"
+provider "registry.terraform.io/infisical/infisical" {
+  version     = "0.16.24"
+  constraints = "0.16.24"
   hashes = [
-    "h1:RZV8v8Cai+mB8er1Zmk7FF1Lxmozsb8dmEv+RX0aRz8=",
+    "h1:R3wSS30GH8AkFwI9a73zM76Zd7kENSUW1MFkEMkaoCM=",
+  ]
+}
+
+provider "registry.terraform.io/marcfrederick/porkbun" {
+  version     = "1.3.3"
+  constraints = "~> 1.2"
+  hashes = [
+    "h1:7pd/XzGn1uU8dB2Q3p+OmNM0apgvNoziaQgV1GgqWxc=",
   ]
 }

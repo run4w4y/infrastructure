@@ -1,0 +1,61 @@
+---
+- name: Renew the existing cluster certificates locally
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    cluster_certificate_ca: /etc/consul/ssl/ca-consul.pem
+    cluster_certificate_ca_key: /etc/consul/ssl/ca-consul-key.pem
+    cluster_certificate_trust: /usr/local/share/ca-certificates/cluster-control.crt
+    cluster_certificates_renew_now: false
+    cluster_certificate_services:
+      - name: nomad
+        port: 4646
+        health_path: /v1/status/leader
+        names:
+          - server.global.nomad
+          - client.global.nomad
+          - nomad.service.consul
+          - nomad-servers.service.consul
+          - nomad-clients.service.consul
+          - localhost
+      - name: vault
+        port: 8200
+        health_path: /v1/sys/health
+        names:
+          - vault.service.consul
+          - vault.service.dc1.consul
+          - localhost
+  tasks:
+    - name: Require the existing CA to outlive the next certificate
+      ansible.builtin.command:
+        argv: [openssl, x509, -in, "{{ cluster_certificate_ca }}", -noout, -checkend, "7862400"]
+      changed_when: false
+
+    - name: Keep the existing signing key readable only by root
+      ansible.builtin.file:
+        path: "{{ cluster_certificate_ca_key }}"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Keep the existing public CA in the host trust directory
+      ansible.builtin.copy:
+        src: "{{ cluster_certificate_ca }}"
+        remote_src: true
+        dest: "{{ cluster_certificate_trust }}"
+        owner: root
+        group: root
+        mode: "0644"
+      register: certificate_host_trust
+
+    - name: Refresh host trust when the existing CA copy changes
+      ansible.builtin.command: update-ca-certificates
+      when: certificate_host_trust.changed
+
+    - name: Renew and verify each service certificate
+      ansible.builtin.include_tasks: tasks/renew-certificate.yml
+      loop: "{{ cluster_certificate_services }}"
+      loop_control:
+        loop_var: certificate_service
+        label: "{{ certificate_service.name }}"

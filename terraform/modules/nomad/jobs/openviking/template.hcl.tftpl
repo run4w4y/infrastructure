@@ -1,0 +1,353 @@
+job "openviking" {
+  datacenters = ["dc1"]
+  type = "service"
+
+  group "openviking" {
+    count = 1
+    network {
+      mode = "bridge"
+      port "api" { to = 1933 }
+    }
+
+    volume "data" {
+      type = "host"
+      source = "${data_volume}"
+      read_only = false
+      access_mode = "single-node-writer"
+      attachment_mode = "file-system"
+    }
+    volume "models" {
+      type = "host"
+      source = "${model_volume}"
+      read_only = false
+      access_mode = "single-node-writer"
+      attachment_mode = "file-system"
+    }
+
+    restart {
+      attempts = 6
+      interval = "10m"
+      delay = "15s"
+      mode = "delay"
+    }
+    reschedule { unlimited = true }
+
+    service {
+      name = "openviking"
+      task = "server"
+      port = "1933"
+      tags = [
+        "traefik.enable=true",
+        "traefik.consulcatalog.connect=true",
+        "traefik.subdomain=memory",
+        "traefik.http.routers.openviking.rule=Host(`${hostname}`)",
+        "traefik.http.routers.openviking.entrypoints=web"
+      ]
+      check {
+        name = "openviking-ready"
+        type = "http"
+        expose = true
+        path = "/health"
+        interval = "15s"
+        timeout = "5s"
+      }
+      connect {
+        sidecar_service {}
+        sidecar_task {
+          resources {
+            cpu = 50
+            memory = 64
+          }
+        }
+      }
+    }
+
+    task "models" {
+      driver = "docker"
+      lifecycle {
+        hook = "prestart"
+        sidecar = true
+      }
+      config {
+        image = "${ollama_image}"
+        args = ["serve"]
+      }
+      env {
+        OLLAMA_HOST = "127.0.0.1:11434"
+        OLLAMA_MODELS = "/models"
+        OLLAMA_NUM_PARALLEL = "1"
+        OLLAMA_MAX_LOADED_MODELS = "2"
+        OLLAMA_KEEP_ALIVE = "-1"
+        OLLAMA_CONTEXT_LENGTH = "2048"
+      }
+      volume_mount {
+        volume = "models"
+        destination = "/models"
+      }
+      resources {
+        cpu = 400
+        memory = 1664
+      }
+    }
+
+    task "prepare-models" {
+      driver = "docker"
+      lifecycle { hook = "prestart" }
+      config {
+        image = "${ollama_image}"
+        entrypoint = ["/bin/sh"]
+        args = ["-ec", "until ollama list >/dev/null 2>&1; do sleep 1; done; ollama show embeddinggemma:300m-qat-q4_0 >/dev/null 2>&1 || ollama pull embeddinggemma:300m-qat-q4_0; ollama show qwen3:0.6b >/dev/null 2>&1 || ollama pull qwen3:0.6b"]
+      }
+      env { OLLAMA_HOST = "127.0.0.1:11434" }
+      resources {
+        cpu = 100
+        memory = 128
+      }
+    }
+
+    task "warm-models" {
+      driver = "docker"
+      lifecycle { hook = "prestart" }
+      config {
+        image = "${image}"
+        entrypoint = ["python", "-c"]
+        args = [<<-PY
+import json, time, urllib.request
+base = 'http://127.0.0.1:11434'
+expected = {'embeddinggemma:300m-qat-q4_0', 'qwen3:0.6b'}
+def call(path, data=None):
+    request = urllib.request.Request(base + path,
+        data=json.dumps(data).encode() if data is not None else None,
+        headers={'Content-Type':'application/json'})
+    with urllib.request.urlopen(request, timeout=120) as response:
+        return json.load(response)
+deadline = time.monotonic() + 600
+while time.monotonic() < deadline:
+    try:
+        if expected <= {model['name'] for model in call('/api/tags')['models']}:
+            break
+    except OSError:
+        pass
+    time.sleep(2)
+else:
+    raise RuntimeError('Required models did not become available')
+vector = call('/v1/embeddings', {'model':'embeddinggemma:300m-qat-q4_0',
+    'input':'OpenViking startup readiness warmup.'})['data'][0]['embedding']
+assert len(vector) == 768 and any(value != 0 for value in vector)
+generated = call('/v1/chat/completions', {'model':'qwen3:0.6b',
+    'messages':[{'role':'user','content':'Say READY.'}], 'max_tokens':8,
+    'temperature':0, 'reasoning_effort':'none','stream':False})['choices'][0]['message']['content']
+assert generated.strip()
+loaded = {model['name']:model['context_length'] for model in call('/api/ps')['models']}
+assert expected <= set(loaded), 'Both providers must remain resident'
+assert all(loaded[name] == 2048 for name in expected), 'Unexpected provider context length'
+print(json.dumps({'embedding_dimension':768, 'generation_nonempty':True,
+                  'resident_models':loaded}))
+PY
+        ]
+      }
+      resources {
+        cpu = 25
+        memory = 64
+      }
+    }
+
+    task "server" {
+      driver = "docker"
+      service {
+        name = "openviking-process"
+        tags = ["traefik.enable=false"]
+        check {
+          name = "openviking-process-ready"
+          type = "script"
+          command = "/app/.venv/bin/python"
+          args = ["-S", "-c", "import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:1933/health',timeout=3); assert r.status == 200 and json.load(r).get('healthy') is True"]
+          interval = "15s"
+          timeout = "5s"
+          check_restart {
+            limit = 3
+            grace = "180s"
+          }
+        }
+      }
+      vault { role = "openviking-server" }
+      config {
+        image = "${image}"
+      }
+      env {
+        OPENVIKING_CONFIG_FILE = "/secrets/ov.conf"
+        OPENVIKING_SERVER_HOST = "127.0.0.1"
+        OPENVIKING_WITH_BOT = "0"
+        OPENVIKING_PROMPT_TEMPLATES_DIR = "/local/prompts"
+        PYTHONPATH = "/local/preload"
+        HOME = "/app/.openviking"
+        OMP_NUM_THREADS = "1"
+      }
+      template {
+        destination = "secrets/ov.conf"
+        perms = "0400"
+        change_mode = "restart"
+        data = <<EOH
+{
+  "server": {
+    "host": "127.0.0.1", "port": 1933, "auth_mode": "api_key",
+    "root_api_key": {{ with secret "secret/data/openviking/server" }}{{ .Data.data.root_api_key | toJSON }}{{ end }},
+    "public_base_url": "https://${hostname}",
+    "profile_enabled": false,
+    "agent_evolution": {"enabled": false}
+  },
+  "storage": {
+    "workspace": "/app/.openviking/data",
+    "agfs": {"backend": "local"},
+    "vectordb": {"backend": "local", "name": "context_gemma_q4_fixed_768"}
+  },
+  "embedding": {
+    "max_concurrent": 1, "max_retries": 1,
+    "dense": {
+      "provider": "openai", "api_base": "http://127.0.0.1:11434/v1",
+      "api_key": "local-only", "model": "embeddinggemma:300m-qat-q4_0",
+      "dimension": 768, "encoding_format": "float"
+    }
+  },
+  "vlm": {
+    "provider": "openai", "api_base": "http://127.0.0.1:11434/v1",
+    "api_key": "local-only", "model": "qwen3:0.6b",
+    "max_concurrent": 1, "max_retries": 1, "timeout": 180,
+    "max_tokens": 192, "reasoning_effort": "none"
+  },
+  "semantic": {"overview_sample_limit": 3},
+  "memory": {"extraction_enabled": false, "session_skill_extraction_enabled": false, "session_auto_commit": {"enabled": false}},
+  "agent_evolution": {"enabled": false}
+}
+EOH
+      }
+      template {
+        destination = "local/preload/sitecustomize.py"
+        change_mode = "restart"
+        data = <<-PY
+import openai.resources.chat
+import openai.resources.embeddings
+PY
+      }
+      template {
+        destination = "local/prompts/semantic/file_summary.yaml"
+        left_delimiter = "[["
+        right_delimiter = "]]"
+        change_mode = "restart"
+        data = <<-YAML
+metadata:
+  id: semantic.file_summary
+  name: Concise source summary
+  description: Summarize immutable source notes without inventing facts.
+  version: "1.0.0"
+  language: en
+  category: semantic
+variables:
+  - {name: file_name, type: string, description: Source filename, required: true}
+  - {name: content, type: string, description: Exact source text, required: true}
+  - {name: output_language, type: string, description: Output language code, required: true}
+template: |
+  In {{ output_language }}, summarize this file in at most 32 words.
+  Keep its concrete facts, names, and useful search keywords. Use fewer words
+  when the source is short. Do not invent entities, relationships, or details.
+  Return only the plain-text summary.
+  File: {{ file_name }}
+  Content:
+  {{ content }}
+llm_config:
+  temperature: 0.0
+YAML
+      }
+      template {
+        destination = "local/prompts/semantic/document_summary.yaml"
+        left_delimiter = "[["
+        right_delimiter = "]]"
+        change_mode = "restart"
+        data = <<-YAML
+metadata:
+  id: semantic.document_summary
+  name: Concise documentation summary
+  description: Summarize source documentation without padding or invented context.
+  version: "1.0.0"
+  language: en
+  category: semantic
+variables:
+  - {name: file_name, type: string, description: Source filename, required: true}
+  - {name: content, type: string, description: Exact source text, required: true}
+  - {name: output_language, type: string, description: Output language code, required: true}
+template: |
+  Select one useful sentence from the source below for semantic search.
+  Copy its exact words unchanged. Do not paraphrase, infer, or add any words.
+  Prefer a sentence containing concrete locations and useful search keywords.
+  Return only the copied sentence, at most 32 words. Preserve its source language.
+  Do not add headings, lists, quotation marks, an audience, or analysis.
+  File: {{ file_name }}
+  Content:
+  {{ content }}
+llm_config:
+  temperature: 0.0
+YAML
+      }
+      template {
+        destination = "local/prompts/semantic/overview_generation.yaml"
+        left_delimiter = "[["
+        right_delimiter = "]]"
+        change_mode = "restart"
+        data = <<-YAML
+metadata:
+  id: semantic.overview_generation
+  name: Concise directory overview
+  description: Describe source notes faithfully within the CPU serving budget.
+  version: "1.0.0"
+  language: en
+  category: semantic
+variables:
+  - {name: dir_name, type: string, description: Directory name, required: true}
+  - {name: file_summaries, type: string, description: Source summaries with links, default: ""}
+  - {name: children_abstracts, type: string, description: Child summaries with links, default: ""}
+  - {name: output_language, type: string, description: Output language code, required: true}
+  - {name: directory_coverage, type: string, description: Entry coverage, default: ""}
+template: |
+  Copy the Markdown index below exactly once. Return nothing else.
+  Keep every heading and source sentence unchanged. Do not add commentary,
+  links, facts, or repeated entries.
+  <index>
+  # {{ dir_name }}
+  {% if "sampled" in directory_coverage %}
+  The listed entries are a sample.
+  {% endif %}
+  {% for entries in [file_summaries, children_abstracts] %}
+  {% for line in entries.splitlines() %}
+  {% if line.startswith('- ') and ' (link: viking://input_sample_' in line %}
+  {% set parts = line[2:].split(' (link: ', 1) %}
+  {% set linked = parts[1].split('): ', 1) %}
+  ### {{ parts[0] }}
+  {{ linked[1] }}
+  {% endif %}
+  {% endfor %}
+  {% endfor %}
+  </index>
+llm_config:
+  temperature: 0.0
+YAML
+      }
+      volume_mount {
+        volume = "data"
+        destination = "/app/.openviking"
+      }
+      resources {
+        cpu = 200
+        memory = 768
+      }
+      kill_timeout = "30s"
+      shutdown_delay = "5s"
+    }
+  }
+  update {
+    max_parallel = 1
+    min_healthy_time = "15s"
+    healthy_deadline = "15m"
+    progress_deadline = "20m"
+    auto_revert = false
+  }
+}

@@ -43,11 +43,6 @@ locals {
         description = "Cloudflare API token with zone, DNS, tunnel, and Pages permissions."
         kind        = "user-placeholder"
       }
-      CONSUL_HTTP_ADDR = {
-        value       = format("$${%s.SERVER_IP_ADDRESS}:8500", var.environment_slug)
-        description = "Consul HTTP address derived from SERVER_IP_ADDRESS."
-        kind        = "derived-reference"
-      }
       CONSUL_HTTP_TOKEN = {
         value       = local.placeholder_value
         description = "Consul bootstrap/admin ACL token."
@@ -63,11 +58,6 @@ locals {
         description = "Ente admin user ID."
         kind        = "user-placeholder"
       }
-      NOMAD_ADDR = {
-        value       = format("http://$${%s.SERVER_IP_ADDRESS}:4646/", var.environment_slug)
-        description = "Nomad address derived from SERVER_IP_ADDRESS."
-        kind        = "derived-reference"
-      }
       NOMAD_TOKEN = {
         value       = local.placeholder_value
         description = "Nomad bootstrap/admin ACL token."
@@ -82,11 +72,6 @@ locals {
         value       = local.placeholder_value
         description = "Porkbun secret API key."
         kind        = "user-placeholder"
-      }
-      VAULT_ADDR = {
-        value       = format("http://$${%s.SERVER_IP_ADDRESS}:8200/", var.environment_slug)
-        description = "Vault address derived from SERVER_IP_ADDRESS."
-        kind        = "derived-reference"
       }
       VAULT_TOKEN = {
         value       = local.placeholder_value

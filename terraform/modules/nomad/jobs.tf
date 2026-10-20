@@ -340,3 +340,69 @@ module "ente_museum" {
   sidecar_memory     = var.connect_sidecar_memory
   sidecar_memory_max = var.connect_sidecar_memory_max
 }
+
+variable "openviking_job_image" {
+  description = "Pinned OpenViking server image."
+  type        = string
+  default     = "ghcr.io/volcengine/openviking@sha256:c60a83cd79cfce80db5266acb8bdd0908eee8abe8ff559a5f786aa504c251ccf"
+}
+
+variable "openviking_job_ollama_image" {
+  description = "Pinned Ollama image used by OpenViking."
+  type        = string
+  default     = "ollama/ollama:0.13.1@sha256:8850b8b33936b9fb246e7b3e02849941f1151ea847e5fb15511f17de9589aea1"
+}
+
+variable "openviking_job_hostname" {
+  type = string
+}
+
+module "openviking" {
+  source = "./jobs/openviking"
+
+  image        = var.openviking_job_image
+  ollama_image = var.openviking_job_ollama_image
+  hostname     = var.openviking_job_hostname
+  data_volume  = nomad_dynamic_host_volume.openviking_data.name
+  model_volume = nomad_dynamic_host_volume.openviking_models.name
+
+  depends_on = [vault_jwt_auth_backend_role.openviking_server]
+}
+
+variable "paseo_job_image" {
+  type = string
+}
+
+variable "paseo_job_configuration" {
+  type = string
+}
+
+variable "paseo_job_settings" {
+  type = object({
+    memory_reservation_mib = number
+    memory_limit_mib       = number
+    sidecar_memory_mib     = number
+    node_options           = string
+  })
+}
+
+variable "paseo_job_node_id" {
+  type = string
+}
+
+variable "paseo_job_meta" {
+  type = map(string)
+}
+
+module "paseo" {
+  source = "./jobs/paseo"
+
+  image         = var.paseo_job_image
+  state_volume  = nomad_dynamic_host_volume.paseo_state.name
+  node_id       = var.paseo_job_node_id
+  configuration = var.paseo_job_configuration
+  settings      = var.paseo_job_settings
+  meta          = var.paseo_job_meta
+
+  depends_on = [vault_jwt_auth_backend_role.paseo_server]
+}

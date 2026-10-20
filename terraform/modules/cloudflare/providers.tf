@@ -2,7 +2,12 @@ terraform {
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 5.4"
+      version = "= 5.28.0"
+    }
+
+    infisical = {
+      source  = "Infisical/infisical"
+      version = "= 0.16.24"
     }
 
     porkbun = {
@@ -19,6 +24,15 @@ terraform {
 
 provider "vault" {
   address = var.vault_address
+
+  dynamic "headers" {
+    for_each = var.cloudflare_access_headers
+
+    content {
+      name  = headers.key
+      value = headers.value
+    }
+  }
 }
 
 provider "cloudflare" {

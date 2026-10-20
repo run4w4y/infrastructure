@@ -1,0 +1,16 @@
+service_registration "consul" {
+  address = {{ vault_service_registration_consul_address | to_json }}
+  check_timeout = {{ vault_service_registration_consul_check_timeout | to_json }}
+  service = {{ vault_service_registration_consul_service | to_json }}
+  service_tags = {{ vault_service_registration_consul_service_tags | to_json }}
+{% if vault_service_registration_consul_service_address | default('', true) | length > 0 %}
+  service_address = {{ vault_service_registration_consul_service_address | to_json }}
+{% endif %}
+{% if vault_service_registration_consul_token | default('', true) | length > 0 %}
+  token = {{ vault_service_registration_consul_token | to_json }}
+{% endif %}
+  disable_registration = "false"
+  scheme = "https"
+  tls_ca_file = "/usr/local/share/ca-certificates/cluster-control.crt"
+  tls_skip_verify = "false"
+}

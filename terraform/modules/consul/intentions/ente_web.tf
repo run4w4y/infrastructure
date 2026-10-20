@@ -16,6 +16,14 @@ resource "consul_config_entry_service_intentions" "ente_web_intentions" {
     name   = "operator-root"
     action = "allow"
   }
+
+  lifecycle {
+    # Consul computes precedence; the provider incorrectly treats it as optional.
+    ignore_changes = [
+      sources[0].precedence,
+      sources[1].precedence,
+    ]
+  }
 }
 
 # Keep the previous destinations until the shared endpoint and rollback pass.
@@ -30,5 +38,13 @@ resource "consul_config_entry_service_intentions" "ente_web_shared_intentions" {
   sources {
     name   = "operator-root"
     action = "allow"
+  }
+
+  lifecycle {
+    # Consul computes precedence; the provider incorrectly treats it as optional.
+    ignore_changes = [
+      sources[0].precedence,
+      sources[1].precedence,
+    ]
   }
 }
