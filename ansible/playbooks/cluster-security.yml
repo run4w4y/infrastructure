@@ -3,6 +3,7 @@
   hosts: servers
   become: true
   gather_facts: false
+  force_handlers: true
   vars:
     admin_firewall_enabled: true
   tasks:
@@ -86,11 +87,15 @@
       changed_when: legacy_ci_sessions.rc == 0
       when: legacy_ci_account.ansible_facts.getent_passwd['nomad-ci'] is not none
 
-    - name: Remove the retired CI account and its dedicated home
+    - name: Remove the retired CI account
       ansible.builtin.user:
         name: nomad-ci
         state: absent
-        remove: true
+
+    - name: Remove the retired CI account's dedicated home
+      ansible.builtin.file:
+        path: /var/lib/nomad-ci
+        state: absent
 
     - name: Remove the retired CI account's dedicated group
       ansible.builtin.group:
